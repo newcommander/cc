@@ -44,7 +44,7 @@
 /*
  * Video encoding example
  */
-static void video_encode_example(const char *filename, int codec_id)
+static void video_encode()
 {
     AVCodec *codec;
     AVCodecContext *c= NULL;
@@ -53,6 +53,10 @@ static void video_encode_example(const char *filename, int codec_id)
     AVFrame *frame;
     AVPacket pkt;
     uint8_t endcode[] = { 0, 0, 1, 0xb7 };
+
+    char *filename = "video.mpg";
+    //int codec_id = AV_CODEC_ID_H264;
+    int codec_id = AV_CODEC_ID_MPEG1VIDEO;
 
     printf("Encode video file %s\n", filename);
 
@@ -188,32 +192,9 @@ static void video_encode_example(const char *filename, int codec_id)
 
 int main(int argc, char **argv)
 {
-    const char *output_type;
-
-    /* register all the codecs */
     avcodec_register_all();
 
-    if (argc < 2) {
-        printf("usage: %s output_type\n"
-               "API example program to decode/encode a media stream with libavcodec.\n"
-               "This program generates a synthetic stream and encodes it to a file\n"
-               "named test.h264, test.mp2 or test.mpg depending on output_type.\n"
-               "The encoded stream is then decoded and written to a raw data output.\n"
-               "output_type must be chosen between 'h264', 'mp2', 'mpg'.\n",
-               argv[0]);
-        return 1;
-    }
-    output_type = argv[1];
-
-    if (!strcmp(output_type, "h264")) {
-        video_encode_example("test.h264", AV_CODEC_ID_H264);
-    } else if (!strcmp(output_type, "mpg")) {
-        video_encode_example("test.mpg", AV_CODEC_ID_MPEG1VIDEO);
-    } else {
-        fprintf(stderr, "Invalid output type '%s', choose between 'h264', 'mp2', or 'mpg'\n",
-                output_type);
-        return 1;
-    }
+    video_encode();
 
     return 0;
 }
