@@ -8,8 +8,9 @@ LINK = -L$(FFMPEG)/lib
 TARGET=main
 
 CFLAGS=-g
-LFLAGS=-lswresample -lavdevice -lavfilter -lswscale -lavformat -lavcodec -lswresample -lavutil \
+LFLAGS=-lavcodec -lswresample -lavutil \
 	   -lz -lrt -lm
+
 .PHONY: all clean
 
 all:
