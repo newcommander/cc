@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <signal.h>
+#include <stdlib.h>
 
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
@@ -24,11 +25,19 @@ static const int PORT = 80;
 static void cc_read_cb(struct bufferevent *bev, void *user_data)
 {
     printf("read\n");
-	struct evbuffer *output = bufferevent_get_output(bev);
-	if (evbuffer_get_length(output) == 0) {
-		printf("flushed answer\n");
-		bufferevent_free(bev);
-	}
+	struct evbuffer *input = bufferevent_get_input(bev);
+
+    size_t len = evbuffer_get_length(input);
+    char *buf = (char*)calloc(len, 1);
+    if (!buf) {
+        printf("calloc failed\n");
+        return;
+    }
+
+    int offset = 0;
+    while ((offset = evbuffer_remove(input, buf, sizeof(buf))) > 0) ;
+
+    printf("[%d]\n%s\n", len, buf);
 }
 
 static void cc_write_cb(struct bufferevent *bev, void *user_data)
@@ -37,7 +46,7 @@ static void cc_write_cb(struct bufferevent *bev, void *user_data)
 	struct evbuffer *output = bufferevent_get_output(bev);
 	if (evbuffer_get_length(output) == 0) {
 		printf("flushed answer\n");
-		bufferevent_free(bev);
+		//bufferevent_free(bev);
 	}
 }
 
