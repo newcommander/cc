@@ -20,7 +20,7 @@
 
 static const char MESSAGE[] = "Hello, World!\n";
 
-static const int PORT = 80;
+static const int PORT = 554;
 
 static void cc_read_cb(struct bufferevent *bev, void *user_data)
 {
@@ -28,14 +28,16 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
 	struct evbuffer *input = bufferevent_get_input(bev);
 
     size_t len = evbuffer_get_length(input);
-    char *buf = (char*)calloc(len, 1);
+    char *buf = (char*)calloc(len + 1, 1);
     if (!buf) {
         printf("calloc failed\n");
         return;
     }
 
+    char *p = buf;
     int offset = 0;
-    while ((offset = evbuffer_remove(input, buf, sizeof(buf))) > 0) ;
+    while ((offset = bufferevent_read(bev, p, sizeof(buf))) > 0)
+        p += offset;
 
     printf("[%d]\n%s\n", len, buf);
 }
