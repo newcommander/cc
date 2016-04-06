@@ -18,9 +18,106 @@
 #include <event2/util.h>
 #include <event2/event.h>
 
+#include "rtsp.h"
+
 static const char MESSAGE[] = "Hello, World!\n";
 
 static const int PORT = 554;
+
+static int get_request_line(Rtsp_Request *rr, const char *buf, int len)
+{
+    char *p_head = NULL, *p_tail = NULL;
+
+    if (!rr || !buf) {
+        printf("Invalide parameter\n");
+        return -1;
+    }
+
+    for (p_head = buf, p_tail = buf; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
+    if (*p_tail != ' ') {
+        printf("Invalide RTSP request when get method\n");
+        return -1;
+    }
+
+    if (!strncmp("OPTIONS", p_head, p_tail - p_head)) {
+        rr->method = MTH_OPTIONS;
+    } else if (!strncmp("DESCRIBE", p_head, p_tail - p_head)) {
+        rr->method = MTH_DESCRIBE;
+    } else if (!strncmp("SETUP", p_head, p_tail - p_head)) {
+        rr->method = MTH_SETUP;
+    } else if (!strncmp("PLAY", p_head, p_tail - p_head)) {
+        rr->method = MTH_PLAY;
+    } else if (!strncmp("PAUSE", p_head, p_tail - p_head)) {
+        rr->method = MTH_PAUSE;
+    } else if (!strncmp("TEARDOWN", p_head, p_tail - p_head)) {
+        rr->method = MTH_TEARDOWN;
+    } else if (!strncmp("RECORD", p_head, p_tail - p_head)) {
+        rr->method = MTH_RECORD;
+    } else if (!strncmp("ANNOUNCE", p_head, p_tail - p_head)) {
+        rr->method = MTH_ANNOUNCE;
+    } else if (!strncmp("GET_PARAMETER", p_head, p_tail - p_head)) {
+        rr->method = MTH_GET_PARAMETER;
+    } else if (!strncmp("REDIRECT", p_head, p_tail - p_head)) {
+        rr->method = MTH_REDIRECT;
+    } else if (!strncmp("SET_PARAMETER", p_head, p_tail - p_head)) {
+        rr->method = MTH_SET_PARAMETER;
+    }
+
+    for (p_head = ++p_tail; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
+    if (*p_tail != ' ') {
+        printf("Invalide RTSP request when get url\n");
+        return -1;
+    }
+
+    if (strncmp("rtsp://", p_head, 7)) {
+        printf("Invalide protocol: %s\n", p_head);
+        return -1;
+    }
+    rr->url = (char*)calloc(p_tail - p_head, 1);
+    if (!rr->url) {
+        printf("calloc for url failed\n");
+        return -1;
+    }
+    strncpy(rr->url, p_head, p_tail - p_head);
+
+    for (p_head = ++p_tail; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
+    if (*p_tail != ' ') {
+        printf("Invalide RTSP request when get version\n");
+        free(rr->url);
+        return -1;
+    }
+
+    if (p_tail - p_head > 32) {
+        printf("version string too long\n");
+        return -1;
+    }
+    strncpy(rr->version, p_head, p_tail - p_head);
+
+    return 0;
+}
+
+static int get_rtsp_request(const char* buf, int len)
+{
+    int ret = 0;
+    Rtsp_Request rr;
+    memset(&rr, 0, sizeof(Rtsp_Request));
+    rr.method = -1;
+
+    ret = get_request_line(&rr, buf, len);
+    if (ret != 0) {
+        printf("get request line failed\n");
+        return -1;
+    }
+    printf("method: %d\nurl: %s\nversion: %s\n", rr.method, rr.url, rr.version);
+
+//    ret = get_request_header(&rr, buf, len);
+    if (ret != 0) {
+        printf("get request header failed\n");
+        return -1;
+    }
+
+    return ret;
+}
 
 static void cc_read_cb(struct bufferevent *bev, void *user_data)
 {
@@ -40,6 +137,7 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
         p += offset;
 
     printf("[%d]\n%s\n", len, buf);
+    get_rtsp_request(buf, len);
 }
 
 static void cc_write_cb(struct bufferevent *bev, void *user_data)
@@ -59,7 +157,7 @@ static void cc_event_cb(struct bufferevent *bev, short events, void *user_data)
 		printf("Connection closed.\n");
 	} else if (events & BEV_EVENT_ERROR) {
 		printf("Got an error on the connection: %s\n",
-		    strerror(errno));/*XXX win32*/
+		    strerror(errno));
 	}
 	/* None of the other events can happen here, since we haven't enabled
 	 * timeouts */
