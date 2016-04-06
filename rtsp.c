@@ -24,7 +24,7 @@ static const char MESSAGE[] = "Hello, World!\n";
 
 static const int PORT = 554;
 
-static int get_request_line(Rtsp_Request *rr, const char *buf, int len)
+static int get_request_line(Rtsp_Request *rr, char *buf, int len)
 {
     char *p_head = NULL, *p_tail = NULL;
 
@@ -80,8 +80,8 @@ static int get_request_line(Rtsp_Request *rr, const char *buf, int len)
     }
     strncpy(rr->url, p_head, p_tail - p_head);
 
-    for (p_head = ++p_tail; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
-    if (*p_tail != ' ') {
+    for (p_head = ++p_tail; *p_tail != '\r' && p_tail != buf + len - 1; p_tail++) ;
+    if (*p_tail != '\r') {
         printf("Invalide RTSP request when get version\n");
         free(rr->url);
         return -1;
@@ -96,7 +96,81 @@ static int get_request_line(Rtsp_Request *rr, const char *buf, int len)
     return 0;
 }
 
-static int get_rtsp_request(const char* buf, int len)
+static int get_request_header(Rtsp_Request *rr, char *buf, int len)
+{
+    char *p_head = NULL, *p_tail = NULL;
+    int ret = 0;
+    char tmp_buf[128], *tmp = NULL;
+    memset(tmp_buf, 0, 128);
+
+    if (!buf) {
+        printf("Invalide parameter\n");
+        return -1;
+    }
+
+    // skip request line
+    p_tail = strstr(buf, "\r\n");
+    if (!p_tail) {
+        printf("Invalide RTSP format");
+        return -1;
+    }
+
+    p_tail += 2;
+    p_head = p_tail;
+    while (p_tail <= buf + len - 1) {
+        p_tail = strstr(p_tail, "\r\n");
+        if (!p_tail)
+            break;
+
+        tmp = strstr(p_head, ":");
+        if (tmp > p_tail) {
+            p_tail += 2;
+            p_head = p_tail;
+            continue;
+        }
+
+        if (!strncmp("CSeq", p_head, tmp - p_head)) {
+            while (*(++tmp) == ' ') ;
+            if (tmp == p_tail) {
+                p_tail += 2;
+                p_head = p_tail;
+                continue;
+            }
+            strncpy(tmp_buf, tmp, p_tail - tmp);
+            rr->rh.cseq = atoi(tmp_buf);
+        } else if (!strncmp("Accept", p_head, tmp - p_head)) {
+            while (*(++tmp) == ' ') ;
+            if (tmp == p_tail) {
+                p_tail += 2;
+                p_head = p_tail;
+                continue;
+            }
+            rr->rh.accept = (char*)calloc(p_tail - tmp + 1, 1);
+            if (rr->rh.accept)
+                strncpy(rr->rh.accept, tmp, p_tail - tmp);
+        } else if (!strncmp("User-Agent", p_head, tmp - p_head)) {
+            while (*(++tmp) == ' ') ;
+            if (tmp == p_tail) {
+                p_tail += 2;
+                p_head = p_tail;
+                continue;
+            }
+            rr->rh.user_agent = (char*)calloc(p_tail - tmp + 1, 1);
+            if (rr->rh.user_agent)
+                strncpy(rr->rh.user_agent, tmp, p_tail - tmp);
+        } else {
+            //strncpy(tmp_buf, p_head, tmp - p_head < 127 ? tmp - p_head : 127);
+            //printf("Unknow header: %s\n", tmp_buf);
+        }
+
+        p_tail += 2;
+        p_head = p_tail;
+    }
+
+    return 0;
+}
+
+static int get_rtsp_request(char* buf, int len)
 {
     int ret = 0;
     Rtsp_Request rr;
@@ -108,15 +182,14 @@ static int get_rtsp_request(const char* buf, int len)
         printf("get request line failed\n");
         return -1;
     }
-    printf("method: %d\nurl: %s\nversion: %s\n", rr.method, rr.url, rr.version);
 
-//    ret = get_request_header(&rr, buf, len);
+    ret = get_request_header(&rr, buf, len);
     if (ret != 0) {
         printf("get request header failed\n");
         return -1;
     }
 
-    return ret;
+    return 0;
 }
 
 static void cc_read_cb(struct bufferevent *bev, void *user_data)
@@ -136,7 +209,7 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
     while ((offset = bufferevent_read(bev, p, sizeof(buf))) > 0)
         p += offset;
 
-    printf("[%d]\n%s\n", len, buf);
+//    printf("[%d]\n%s\n", len, buf);
     get_rtsp_request(buf, len);
 }
 
