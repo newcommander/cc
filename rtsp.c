@@ -12,19 +12,77 @@
 #include <signal.h>
 #include <stdlib.h>
 
-#include <event2/bufferevent.h>
-#include <event2/buffer.h>
-#include <event2/listener.h>
-#include <event2/util.h>
-#include <event2/event.h>
-
 #include "rtsp.h"
 
 static const char MESSAGE[] = "Hello, World!\n";
 
 static const int PORT = 554;
 
-static int get_request_line(Rtsp_Request *rr, char *buf, int len)
+static char* find_phrase_by_code(char *code)
+{
+    status_code *p = NULL;
+    if (!code)
+        return NULL;
+    p = response_code;
+    while (p && p->code) {
+        if (!strcmp(code, p->code))
+            return p->phrase;
+        p++;
+    }
+    return NULL;
+}
+
+static char* find_code_by_phrase(char *phrase)
+{
+    status_code *p = NULL;
+    if (!phrase)
+        return NULL;
+    p = response_code;
+    while (p && p->phrase) {
+        if (!strcmp(phrase, p->phrase))
+            return p->code;
+        p++;
+    }
+    return NULL;
+}
+
+static int make_status_line(char **buf, char *code, char *phrase)
+{
+    if (!code && !phrase)
+        return -1;
+    else if (code && phrase) {
+        *buf = (char*)calloc(13 + strlen(code) + strlen(phrase), 1);
+        if (!*buf)
+            return -1;
+        sprintf(*buf, "RTSP/1.0 %s %s\r\n", code, phrase);
+        return 0;
+    } else if (code && !phrase) {
+        phrase = find_phrase_by_code(code);
+        if (!phrase)
+            return -1;
+        *buf = (char*)calloc(13 + strlen(code) + strlen(phrase), 1);
+        if (!*buf)
+            return -1;
+        sprintf(*buf, "RTSP/1.0 %s %s\r\n", code, phrase);
+        return 0;
+    } else {
+        code = find_code_by_phrase(phrase);
+        if (!code)
+            return -1;
+        *buf = (char*)calloc(13 + strlen(code) + strlen(phrase), 1);
+        if (!*buf)
+            return -1;
+        sprintf(*buf, "RTSP/1.0 %s %s\r\n", code, phrase);
+        return 0;
+    }
+}
+
+static int make_response_header(rtsp_session *rs, char **buf)
+{
+    return 0;
+}
+
+static int get_request_line(rtsp_request *rr, char *buf, int len)
 {
     char *p_head = NULL, *p_tail = NULL;
 
@@ -96,7 +154,7 @@ static int get_request_line(Rtsp_Request *rr, char *buf, int len)
     return 0;
 }
 
-static int get_request_header(Rtsp_Request *rr, char *buf, int len)
+static int get_request_header(rtsp_request *rr, char *buf, int len)
 {
     char *p_head = NULL, *p_tail = NULL;
     int ret = 0;
@@ -173,8 +231,8 @@ static int get_request_header(Rtsp_Request *rr, char *buf, int len)
 static int get_rtsp_request(char* buf, int len)
 {
     int ret = 0;
-    Rtsp_Request rr;
-    memset(&rr, 0, sizeof(Rtsp_Request));
+    rtsp_request rr;
+    memset(&rr, 0, sizeof(rtsp_request));
     rr.method = -1;
 
     ret = get_request_line(&rr, buf, len);
@@ -209,7 +267,6 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
     while ((offset = bufferevent_read(bev, p, sizeof(buf))) > 0)
         p += offset;
 
-//    printf("[%d]\n%s\n", len, buf);
     get_rtsp_request(buf, len);
 }
 
