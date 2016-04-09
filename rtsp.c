@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "rtsp.h"
 
@@ -21,39 +22,47 @@ static const int PORT = 554;
 static char* find_phrase_by_code(char *code)
 {
     status_code *p = NULL;
-    if (!code)
+    if (!code) {
+        printf("%s: Invalid parameter\n", __func__);
         return NULL;
+    }
     p = response_code;
     while (p && p->code) {
         if (!strcmp(code, p->code))
             return p->phrase;
         p++;
     }
+    printf("%s: no elem found\n", __func__);
     return NULL;
 }
 
 static char* find_code_by_phrase(char *phrase)
 {
     status_code *p = NULL;
-    if (!phrase)
+    if (!phrase) {
+        printf("%s: Invalid parameter\n", __func__);
         return NULL;
+    }
     p = response_code;
     while (p && p->phrase) {
         if (!strcmp(phrase, p->phrase))
             return p->code;
         p++;
     }
+    printf("%s: no elem found\n", __func__);
     return NULL;
 }
 
 static int make_status_line(char **buf, char *code, char *phrase)
 {
-    if (!code && !phrase)
+    if (!code && !phrase) {
+        printf("%s: Invalid parameter\n", __func__);
         return -1;
+    }
     else if (code && phrase) {
         *buf = (char*)calloc(13 + strlen(code) + strlen(phrase), 1);
         if (!*buf)
-            return -1;
+            goto calloc_failed;
         sprintf(*buf, "RTSP/1.0 %s %s\r\n", code, phrase);
         return 0;
     } else if (code && !phrase) {
@@ -62,7 +71,7 @@ static int make_status_line(char **buf, char *code, char *phrase)
             return -1;
         *buf = (char*)calloc(13 + strlen(code) + strlen(phrase), 1);
         if (!*buf)
-            return -1;
+            goto calloc_failed;
         sprintf(*buf, "RTSP/1.0 %s %s\r\n", code, phrase);
         return 0;
     } else {
@@ -71,14 +80,99 @@ static int make_status_line(char **buf, char *code, char *phrase)
             return -1;
         *buf = (char*)calloc(13 + strlen(code) + strlen(phrase), 1);
         if (!*buf)
-            return -1;
+            goto calloc_failed;
         sprintf(*buf, "RTSP/1.0 %s %s\r\n", code, phrase);
         return 0;
     }
+
+calloc_failed:
+    printf("%s: calloc failed\n", __func__);
+    return -1;
 }
 
-static int make_response_header(rtsp_session *rs, char **buf)
+static int make_response_cseq(char **cseq_str, int cseq)
 {
+    *cseq_str = (char*)calloc(32, 1);
+    if (!(*cseq_str)) {
+        printf("%s: calloc failed\n", __func__);
+        return -1;
+    }
+    sprintf(*cseq_str, "CSeq: %d\r\n", cseq);
+    return 0;
+}
+
+static int make_response_date(char **time_str)
+{
+    char *wday[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+    char *mon[] = {"Jan","Feb","Mar","Apr","May","June","July","Aug","Sept","Oct","Nov","Dec"};
+    struct tm tt;
+    time_t t;
+
+    *time_str = (char*)calloc(40, 1);
+    if (!(*time_str)) {
+        printf("%s: calloc failed\n", __func__);
+        return -1;
+    }
+    t = time(NULL);
+    gmtime_r(&t, &tt);
+    sprintf(*time_str, "Date: %s, %s %d %d %d:%d:%d GMT\r\n", wday[tt.tm_wday], mon[tt.tm_mon],
+            tt.tm_mday, 1900 + tt.tm_year, (tt.tm_hour + 8) % 24, tt.tm_min, tt.tm_sec);
+
+    return 0;
+}
+
+static int make_response_for_options(char **response, int cseq)
+{
+    char *public = "OPTIONS, DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE, GET_PARAMETER, SET_PARAMETER";
+    char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
+    int ret, len = 0;
+
+    ret = make_status_line(&status_line, "200", NULL);
+    if (!status_line)
+        return -1;
+    ret = make_response_cseq(&cseq_str, cseq);
+    if (!cseq_str) {
+        free(status_line);
+        return -1;
+    }
+    ret = make_response_date(&date_str);
+    if (!cseq_str) {
+        free(status_line);
+        free(cseq_str);
+        return -1;
+    }
+    *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(public) + 13, 1);
+    if (!(*response)) {
+        printf("%s: calloc failed\n", __func__);
+        free(status_line);
+        free(cseq_str);
+        free(date_str);
+        return -1;
+    }
+    snprintf(*response, strlen(status_line) + 1, status_line);
+    strncat(*response, cseq_str, strlen(cseq_str));
+    strncat(*response, date_str, strlen(date_str));
+    snprintf((*response) + strlen(*response), strlen(public) + 11, "Public: %s\r\n", public);
+    strncat(*response, "\r\n", 2);
+
+    return 0;
+}
+
+static int make_response(rtsp_request *rr, char **buf)
+{
+    if (!rr) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+
+    switch (rr->method) {
+    case MTH_OPTIONS:
+        make_response_for_options(buf, rr->rh.cseq);
+        break;
+    default:
+        printf("Unknow RTSP request method\n");
+        return -1;
+    }
     return 0;
 }
 
@@ -87,13 +181,13 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
     char *p_head = NULL, *p_tail = NULL;
 
     if (!rr || !buf) {
-        printf("Invalide parameter\n");
+        printf("Invalid parameter\n");
         return -1;
     }
 
     for (p_head = buf, p_tail = buf; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != ' ') {
-        printf("Invalide RTSP request when get method\n");
+        printf("Invalid RTSP request when get method\n");
         return -1;
     }
 
@@ -123,25 +217,25 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
 
     for (p_head = ++p_tail; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != ' ') {
-        printf("Invalide RTSP request when get url\n");
+        printf("Invalid RTSP request when get uri\n");
         return -1;
     }
 
     if (strncmp("rtsp://", p_head, 7)) {
-        printf("Invalide protocol: %s\n", p_head);
+        printf("Invalid protocol: %s\n", p_head);
         return -1;
     }
-    rr->url = (char*)calloc(p_tail - p_head, 1);
-    if (!rr->url) {
-        printf("calloc for url failed\n");
+    rr->uri = (char*)calloc(p_tail - p_head, 1);
+    if (!rr->uri) {
+        printf("calloc for uri failed\n");
         return -1;
     }
-    strncpy(rr->url, p_head, p_tail - p_head);
+    strncpy(rr->uri, p_head, p_tail - p_head);
 
     for (p_head = ++p_tail; *p_tail != '\r' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != '\r') {
-        printf("Invalide RTSP request when get version\n");
-        free(rr->url);
+        printf("Invalid RTSP request when get version\n");
+        free(rr->uri);
         return -1;
     }
 
@@ -162,14 +256,14 @@ static int get_request_header(rtsp_request *rr, char *buf, int len)
     memset(tmp_buf, 0, 128);
 
     if (!buf) {
-        printf("Invalide parameter\n");
+        printf("Invalid parameter\n");
         return -1;
     }
 
     // skip request line
     p_tail = strstr(buf, "\r\n");
     if (!p_tail) {
-        printf("Invalide RTSP format");
+        printf("Invalid RTSP format");
         return -1;
     }
 
@@ -228,31 +322,40 @@ static int get_request_header(rtsp_request *rr, char *buf, int len)
     return 0;
 }
 
-static int get_rtsp_request(char* buf, int len)
+static rtsp_request* convert_rtsp_request(char* buf, int len)
 {
     int ret = 0;
-    rtsp_request rr;
-    memset(&rr, 0, sizeof(rtsp_request));
-    rr.method = -1;
+    rtsp_request* rr = NULL;
 
-    ret = get_request_line(&rr, buf, len);
-    if (ret != 0) {
-        printf("get request line failed\n");
-        return -1;
+    if (!buf) {
+        printf("%s: Invalid parameter\n", __func__);
+        return NULL;
+    }
+    rr = (rtsp_request*)calloc(1, sizeof(rtsp_request));
+    if (!rr) {
+        printf("%s: calloc RTSP request failed\n", __func__);
+        return NULL;
     }
 
-    ret = get_request_header(&rr, buf, len);
+    ret = get_request_line(rr, buf, len);
     if (ret != 0) {
-        printf("get request header failed\n");
-        return -1;
+        free(rr);
+        return NULL;
     }
 
-    return 0;
+    ret = get_request_header(rr, buf, len);
+    if (ret != 0) {
+        free(rr);
+        return NULL;
+    }
+
+    return rr;
 }
 
 static void cc_read_cb(struct bufferevent *bev, void *user_data)
 {
-    printf("read\n");
+    rtsp_request *rr = NULL;
+    char *response_str = NULL;
 	struct evbuffer *input = bufferevent_get_input(bev);
 
     size_t len = evbuffer_get_length(input);
@@ -267,12 +370,24 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
     while ((offset = bufferevent_read(bev, p, sizeof(buf))) > 0)
         p += offset;
 
-    get_rtsp_request(buf, len);
+    rr = convert_rtsp_request(buf, len);
+    if (!rr)
+        return;
+
+    make_response(rr, &response_str);
+    if (!response_str) {
+        printf("%s: Could not make response content for request\n", __func__);
+        free(rr);
+        return;
+    }
+    free(rr);
+
+    bufferevent_write(bev, response_str, strlen(response_str));
+    free(response_str);
 }
 
 static void cc_write_cb(struct bufferevent *bev, void *user_data)
 {
-    printf("write\n");
 	struct evbuffer *output = bufferevent_get_output(bev);
 	if (evbuffer_get_length(output) == 0) {
 		printf("flushed answer\n");
@@ -282,7 +397,6 @@ static void cc_write_cb(struct bufferevent *bev, void *user_data)
 
 static void cc_event_cb(struct bufferevent *bev, short events, void *user_data)
 {
-    printf("event\n");
 	if (events & BEV_EVENT_EOF) {
 		printf("Connection closed.\n");
 	} else if (events & BEV_EVENT_ERROR) {

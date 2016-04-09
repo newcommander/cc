@@ -4,17 +4,17 @@
 #include <event2/util.h>
 #include <event2/event.h>
 
-#define MTH_DESCRIBE        0
-#define MTH_ANNOUNCE        1
-#define MTH_GET_PARAMETER   2
-#define MTH_OPTIONS         3
-#define MTH_PAUSE           4
-#define MTH_PLAY            5
-#define MTH_RECORD          6
-#define MTH_REDIRECT        7
-#define MTH_SETUP           8
-#define MTH_SET_PARAMETER   9
-#define MTH_TEARDOWN        10
+#define MTH_DESCRIBE        1
+#define MTH_ANNOUNCE        2
+#define MTH_GET_PARAMETER   3
+#define MTH_OPTIONS         4
+#define MTH_PAUSE           5
+#define MTH_PLAY            6
+#define MTH_RECORD          7
+#define MTH_REDIRECT        8
+#define MTH_SETUP           9
+#define MTH_SET_PARAMETER   10
+#define MTH_TEARDOWN        11
 
 #define RTSP_VERSION "RTSP/1.0"
 
@@ -79,7 +79,7 @@ typedef struct {
 
 typedef struct {
     int method;
-    char *url;
+    char *uri;
     char version[33];
     request_header rh;
 } rtsp_request;
