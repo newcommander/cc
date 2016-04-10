@@ -72,19 +72,24 @@ status_code response_code[] = {
 };
 
 typedef struct {
+    char *url;
+} rtsp_uri;
+
+//do NOT alloc this cause never free
+typedef struct {
     int cseq;
     char *accept;
     char *user_agent;
-} request_header;
+} rtsp_request_header;
 
 typedef struct {
     int method;
-    char *uri;
+    rtsp_uri *uri;
     char version[33];
-    request_header rh;
+    rtsp_request_header rh;
 } rtsp_request;
 
 typedef struct {
     struct bufferevent *bev;
-    char *request_uri;
+    rtsp_uri *uri;
 } rtsp_session;

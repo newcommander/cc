@@ -19,6 +19,39 @@ static const char MESSAGE[] = "Hello, World!\n";
 
 static const int PORT = 554;
 
+rtsp_uri* alloc_rtsp_uri()
+{
+    // FIXME : alloc and add to list
+    return NULL;
+}
+
+void release_rtsp_uri(rtsp_uri *uri)
+{
+    if (!uri)
+        return;
+    free(rui->url);
+    // FIXME : handle the list
+    free(uri);
+}
+
+rtsp_uri* find_rtsp_uri(char *url)
+{
+    if (!url)
+        return NULL;
+    // FIXME : find in list
+    return NULL;
+}
+
+void release_rtsp_request(rtsp_request *rr)
+{
+    if (!rr)
+        return;
+    release_rtsp_uri(rr->uri);
+    free(rr->rh.accept);
+    free(rr->rh.user_agent);
+    free(rr);
+}
+
 static char* find_phrase_by_code(char *code)
 {
     status_code *p = NULL;
@@ -129,17 +162,17 @@ static int make_response_for_options(char **response, int cseq)
 
     ret = make_status_line(&status_line, "200", NULL);
     if (!status_line)
-        return -1;
+        return 500;
     ret = make_response_cseq(&cseq_str, cseq);
     if (!cseq_str) {
         free(status_line);
-        return -1;
+        return 500;
     }
     ret = make_response_date(&date_str);
     if (!cseq_str) {
         free(status_line);
         free(cseq_str);
-        return -1;
+        return 500;
     }
     *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(public) + 13, 1);
     if (!(*response)) {
@@ -147,7 +180,7 @@ static int make_response_for_options(char **response, int cseq)
         free(status_line);
         free(cseq_str);
         free(date_str);
-        return -1;
+        return 500;
     }
     snprintf(*response, strlen(status_line) + 1, status_line);
     strncat(*response, cseq_str, strlen(cseq_str));
@@ -158,6 +191,28 @@ static int make_response_for_options(char **response, int cseq)
     free(status_line);
     free(cseq_str);
     free(date_str);
+    return 0;
+}
+
+static int make_entity_header(rtsp_session *rs, char **buf, int sdp_len)
+{
+    char sdp_len_str[32];
+    if (!buf || !rs || (sdp_len < 0)) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+    memset(sdp_len_str, 0, 32);
+    snprintf(sdp_len_str, 32, "%d", sdp_len);
+
+    *buf = (char*)calloc(strlen(rs->uri) + strlen(sdp_len_str) + 66, 1);
+    if (!(*buf)) {
+        printf("%s: calloc failed\n", __func__);
+        return -1;
+    }
+    snprintf(*buf, strlen(rs->uri) + 17, "Content-Base: %s\r\n", rs->uri);
+    strncat(*buf, "Content-type: application/sdp\r\n", 31);
+    snprintf((*buf) + strlen(*buf), strlen(sdp_len_str) + 19, "Content-length: %s\r\n", sdp_len_str);
+
     return 0;
 }
 
@@ -172,84 +227,105 @@ static int make_sdp_string(char **buf)
     ;
 }
 
-static int make_response_for_describe(char **buf, request_header *rh)
+static rtsp_session* create_rtsp_session(struct bufferevent *bev, rtsp_request *rr)
 {
-    char *status_line = NULL, *cseq_str = NULL, *date_str = NULL, *sdp_str = NULL;
-    int ret, len = 0;
-
-    if (!buf || !rh || !rh->accept) {
+    if (!bev || !rr) {
         printf("%s: Invalid parameter\n", __func__);
         return -1;
     }
+    ;// TODO : alloc, init, add to list
+    return NULL;
+}
 
-    if (!strstr(rh->accept, "application/sdp")) {
+static int make_response_for_describe(struct bufferevent *bev, rtsp_request *rr, char **buf)
+{
+    char *status_line = NULL, *cseq_str = NULL, *date_str = NULL, *entity_header = NULL, *sdp_str = NULL;
+    int len = 0;
+    rtsp_session *rs = NULL;
+
+    if (!buf || !rr || !rr->rh.accept) {
+        printf("%s: Invalid parameter\n", __func__);
+        *buf = NULL;
+        return 500;
+    }
+
+    if (!strstr(rr->rh.accept, "application/sdp")) {
         printf("%s: Only accept application/sdp\n", __func__);
-        return -1;
+        *buf = NULL;
+        return 406;
     }
 
     ret = make_status_line(&status_line, "200", NULL);
     if (!status_line)
-        return -1;
+        goto out;
     ret = make_response_cseq(&cseq_str, cseq);
-    if (!cseq_str) {
-        free(status_line);
-        return -1;
-    }
+    if (!cseq_str)
+        goto out;
     ret = make_response_date(&date_str);
-    if (!cseq_str) {
-        free(status_line);
-        free(cseq_str);
-        return -1;
-    }
+    if (!cseq_str)
+        goto out;
     make_sdp_string(&sdp_str);
-    if (!sdp_str) {
-        free(status_line);
-        free(cseq_str);
-        free(date_str);
-        return -1;
+    if (!sdp_str)
+        goto out;
+
+    rs = create_rtsp_session(bev, rr);
+    if (!rs)
+        goto out;
+
+    make_entity_header(&entity_header, rr->uri, strlen(sdp_str));
+    if (!entity_header) {
+        release_rtsp_session(rs);
+        goto out;
     }
     *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(public) + 13, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
-        free(status_line);
-        free(cseq_str);
-        free(date_str);
-        free(sdp_str);
-        return -1;
+        release_rtsp_session(rs);
+        goto out;
     }
     snprintf(*response, strlen(status_line) + 1, status_line);
     strncat(*response, cseq_str, strlen(cseq_str));
     strncat(*response, date_str, strlen(date_str));
-    snprintf((*response) + strlen(*response), strlen(public) + 11, "Public: %s\r\n", public);
+    snprintf((*response) + strlen(*response), strlen(entity_header) + 1, "%s", entity_header);
     strncat(*response, "\r\n", 2);
     strncat(*response, sdp_str, strlen(sdp_str));
 
-    free(status_line);
-    free(cseq_str);
-    free(date_str);
-    free(sdp_str);
     return 0;
+
+out:
+    if (status_line)
+        free(status_line);
+    if (cseq_str)
+        free(cseq_str);
+    if (date_str)
+        free(date_str);
+    if (sdp_str)
+        free(sdp_str);
+    return 500;
 }
 
 static int make_response(rtsp_request *rr, char **buf)
 {
+    int ret = 0;
     if (!rr) {
         printf("%s: Invalid parameter\n", __func__);
-        return -1;
+        return 500;
     }
 
+    // functions make_response_for_xxx need to return response status code
     switch (rr->method) {
     case MTH_OPTIONS:
-        make_response_for_options(buf, rr->rh.cseq);
+        ret = make_response_for_options(buf, rr->rh.cseq);
         break;
     case MTH_DESCRIBE:
-        make_response_for_describe(buf, &rr->rh);
+        ret = make_response_for_describe(buf, &rr->rh);
         break;
     default:
+        // never here
         printf("Unknow RTSP request method\n");
-        return -1;
+        return 500;
     }
-    return 0;
+    return ret;
 }
 
 static int get_request_line(rtsp_request *rr, char *buf, int len)
@@ -258,13 +334,13 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
 
     if (!rr || !buf) {
         printf("Invalid parameter\n");
-        return -1;
+        return 500;
     }
 
     for (p_head = buf, p_tail = buf; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != ' ') {
         printf("Invalid RTSP request when get method\n");
-        return -1;
+        return 400;
     }
 
     if (!strncmp("OPTIONS", p_head, p_tail - p_head)) {
@@ -280,34 +356,34 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
     } else if (!strncmp("TEARDOWN", p_head, p_tail - p_head)) {
         rr->method = MTH_TEARDOWN;
     } else if (!strncmp("RECORD", p_head, p_tail - p_head)) {
-        rr->method = MTH_RECORD;
+        return 405;
     } else if (!strncmp("ANNOUNCE", p_head, p_tail - p_head)) {
-        rr->method = MTH_ANNOUNCE;
+        return 405;
     } else if (!strncmp("GET_PARAMETER", p_head, p_tail - p_head)) {
         rr->method = MTH_GET_PARAMETER;
     } else if (!strncmp("REDIRECT", p_head, p_tail - p_head)) {
-        rr->method = MTH_REDIRECT;
+        return 405;
     } else if (!strncmp("SET_PARAMETER", p_head, p_tail - p_head)) {
         rr->method = MTH_SET_PARAMETER;
     } else {
         printf("%s: Unknow RTSP request recived: %s\n", __func__, p_head);
-        return -1;
+        return 400;
     }
 
     for (p_head = ++p_tail; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != ' ') {
         printf("Invalid RTSP request when get uri\n");
-        return -1;
+        return 400;
     }
 
     if (strncmp("rtsp://", p_head, 7)) {
         printf("Invalid protocol: %s\n", p_head);
-        return -1;
+        return 400;
     }
     rr->uri = (char*)calloc(p_tail - p_head, 1);
     if (!rr->uri) {
         printf("calloc for uri failed\n");
-        return -1;
+        return 500;
     }
     strncpy(rr->uri, p_head, p_tail - p_head);
 
@@ -315,19 +391,19 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
     if (*p_tail != '\r') {
         printf("Invalid RTSP request when get version\n");
         free(rr->uri);
-        return -1;
+        return 400;
     }
 
     if (p_tail - p_head > 32) {
         printf("version string too long\n");
-        return -1;
+        return 505;
     }
     strncpy(rr->version, p_head, p_tail - p_head);
 
     return 0;
 }
 
-static int get_request_header(rtsp_request *rr, char *buf, int len)
+static int get_rtsp_request_header(rtsp_request *rr, char *buf, int len)
 {
     char *p_head = NULL, *p_tail = NULL;
     int ret = 0;
@@ -336,14 +412,14 @@ static int get_request_header(rtsp_request *rr, char *buf, int len)
 
     if (!buf) {
         printf("Invalid parameter\n");
-        return -1;
+        return 500;
     }
 
     // skip request line
     p_tail = strstr(buf, "\r\n");
     if (!p_tail) {
         printf("Invalid RTSP format");
-        return -1;
+        return 400;
     }
 
     p_tail += 2;
@@ -401,41 +477,51 @@ static int get_request_header(rtsp_request *rr, char *buf, int len)
     return 0;
 }
 
-static rtsp_request* convert_rtsp_request(char* buf, int len)
+static int convert_rtsp_request(rtsp_request **rr, char *buf, int len)
 {
     int ret = 0;
-    rtsp_request* rr = NULL;
 
     if (!buf) {
         printf("%s: Invalid parameter\n", __func__);
         return NULL;
     }
-    rr = (rtsp_request*)calloc(1, sizeof(rtsp_request));
-    if (!rr) {
+
+    *rr = (rtsp_request*)calloc(1, sizeof(rtsp_request));
+    if (!(*rr)) {
         printf("%s: calloc RTSP request failed\n", __func__);
-        return NULL;
+        return 500;
     }
 
-    ret = get_request_line(rr, buf, len);
+    ret = get_request_line(*rr, buf, len);
     if (ret != 0) {
-        free(rr);
-        return NULL;
+        release_rtsp_request(*rr);
+        return ret;
     }
 
-    ret = get_request_header(rr, buf, len);
+    ret = get_rtsp_request_header(*rr, buf, len);
     if (ret != 0) {
-        free(rr);
-        return NULL;
+        release_rtsp_request(*rr);
+        return ret;
     }
 
-    return rr;
+    return 0;
+}
+
+void send_error_reply(int code)
+{
+    if (code <= 0) {
+        printf("%s: bad status code: %d\n", __func__, code);
+        ; // TODO
+    }
+    // FIXME : send error reply
 }
 
 static void cc_read_cb(struct bufferevent *bev, void *user_data)
 {
+	struct evbuffer *input = bufferevent_get_input(bev);
     rtsp_request *rr = NULL;
     char *response_str = NULL;
-	struct evbuffer *input = bufferevent_get_input(bev);
+    int ret = 0;
 
     size_t len = evbuffer_get_length(input);
     char *buf = (char*)calloc(len + 1, 1);
@@ -449,21 +535,30 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
     while ((offset = bufferevent_read(bev, p, sizeof(buf))) > 0)
         p += offset;
 
-    rr = convert_rtsp_request(buf, len);
+    ret = convert_rtsp_request(&rr, buf, len);
     free(buf);
-    if (!rr)
+    if (!rr) {
+        send_error_reply(ret);
         return;
+    }
 
-    make_response(rr, &response_str);
+    ret = make_response(rr, &response_str);
     if (!response_str) {
-        printf("%s: Could not make response content for request\n", __func__);
+        send_error_reply(ret);
         free(rr);
         return;
     }
     free(rr);
 
     bufferevent_write(bev, response_str, strlen(response_str));
+    //FIXME do free in write callback
     free(response_str);
+    return;
+
+bad_request:
+    ;//FIXME send 4xx
+bad_response:
+    ;//FIXME send 500
 }
 
 static void cc_write_cb(struct bufferevent *bev, void *user_data)
