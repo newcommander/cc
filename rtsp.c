@@ -155,6 +155,79 @@ static int make_response_for_options(char **response, int cseq)
     snprintf((*response) + strlen(*response), strlen(public) + 11, "Public: %s\r\n", public);
     strncat(*response, "\r\n", 2);
 
+    free(status_line);
+    free(cseq_str);
+    free(date_str);
+    return 0;
+}
+
+static int make_sdp_string(char **buf)
+{
+    char *version_str = "v=0\r\n";
+
+    if (!(*buf)) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+    ;
+}
+
+static int make_response_for_describe(char **buf, request_header *rh)
+{
+    char *status_line = NULL, *cseq_str = NULL, *date_str = NULL, *sdp_str = NULL;
+    int ret, len = 0;
+
+    if (!buf || !rh || !rh->accept) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+
+    if (!strstr(rh->accept, "application/sdp")) {
+        printf("%s: Only accept application/sdp\n", __func__);
+        return -1;
+    }
+
+    ret = make_status_line(&status_line, "200", NULL);
+    if (!status_line)
+        return -1;
+    ret = make_response_cseq(&cseq_str, cseq);
+    if (!cseq_str) {
+        free(status_line);
+        return -1;
+    }
+    ret = make_response_date(&date_str);
+    if (!cseq_str) {
+        free(status_line);
+        free(cseq_str);
+        return -1;
+    }
+    make_sdp_string(&sdp_str);
+    if (!sdp_str) {
+        free(status_line);
+        free(cseq_str);
+        free(date_str);
+        return -1;
+    }
+    *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(public) + 13, 1);
+    if (!(*response)) {
+        printf("%s: calloc failed\n", __func__);
+        free(status_line);
+        free(cseq_str);
+        free(date_str);
+        free(sdp_str);
+        return -1;
+    }
+    snprintf(*response, strlen(status_line) + 1, status_line);
+    strncat(*response, cseq_str, strlen(cseq_str));
+    strncat(*response, date_str, strlen(date_str));
+    snprintf((*response) + strlen(*response), strlen(public) + 11, "Public: %s\r\n", public);
+    strncat(*response, "\r\n", 2);
+    strncat(*response, sdp_str, strlen(sdp_str));
+
+    free(status_line);
+    free(cseq_str);
+    free(date_str);
+    free(sdp_str);
     return 0;
 }
 
@@ -168,6 +241,9 @@ static int make_response(rtsp_request *rr, char **buf)
     switch (rr->method) {
     case MTH_OPTIONS:
         make_response_for_options(buf, rr->rh.cseq);
+        break;
+    case MTH_DESCRIBE:
+        make_response_for_describe(buf, &rr->rh);
         break;
     default:
         printf("Unknow RTSP request method\n");
@@ -213,6 +289,9 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
         rr->method = MTH_REDIRECT;
     } else if (!strncmp("SET_PARAMETER", p_head, p_tail - p_head)) {
         rr->method = MTH_SET_PARAMETER;
+    } else {
+        printf("%s: Unknow RTSP request recived: %s\n", __func__, p_head);
+        return -1;
     }
 
     for (p_head = ++p_tail; *p_tail != ' ' && p_tail != buf + len - 1; p_tail++) ;
@@ -371,6 +450,7 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
         p += offset;
 
     rr = convert_rtsp_request(buf, len);
+    free(buf);
     if (!rr)
         return;
 
