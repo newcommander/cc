@@ -1,11 +1,3 @@
-/*
-  This exmple program provides a trivial server program that listens for TCP
-  connections on port 9995.  When they arrive, it writes a short message to
-  each client connection, and closes each connection once it is flushed.
-
-  Where possible, it exits cleanly in response to a SIGINT (ctrl-c).
-*/
-
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -249,6 +241,10 @@ static int make_sdp_string(char **buf)
 {
     char *version = "v=0\r\n";
     char origin[1024];
+    char *session_name = "s=live from cc\r\n";
+    char *time = "t=0 0\r\n";
+    char *media_desc = "m=video 0 RTP/AVP 96\r\n";
+    char *media_attr = "a=rtpmap:96 H264/90000\r\n";    // how to set this attribute ???
     struct timeval tv;
 
     if (!buf) {
@@ -259,20 +255,24 @@ static int make_sdp_string(char **buf)
     gettimeofday(&tv, NULL);
 
     memset(origin, 0, 1024);
-
     strncat(origin, "o=- ", 6);
     snprintf(origin + strlen(origin), 20, "%ld.%ld ", tv.tv_sec, tv.tv_usec);
     strncat(origin, "1 IN IP4 ", 9);
     strncat(origin, active_addr, strlen(active_addr));
     strncat(origin, "\r\n", 2);
 
-    *buf = (char*)calloc(strlen(version) + strlen(origin), 1);
+    *buf = (char*)calloc(strlen(version) + strlen(origin) + strlen(session_name) + \
+            strlen(time) + strlen(media_desc) + strlen(media_attr), 1);
     if (!(*buf)) {
         printf("%s: calloc failed\n", __func__);
         return -1;
     }
     strncat(*buf, version, strlen(version));
     strncat(*buf, origin, strlen(origin));
+    strncat(*buf, session_name, strlen(session_name));
+    strncat(*buf, time, strlen(time));
+    strncat(*buf, media_desc, strlen(media_desc));
+    strncat(*buf, media_attr, strlen(media_attr));
 
     return 0;
 }
@@ -618,13 +618,6 @@ void send_error_reply(int code)
     // FIXME : send error reply
 }
 
-// 1: exist, 0: not exist
-static int check_resource_exist(char *url)
-{
-    ;// TODO
-    return 0;
-}
-
 static void cc_read_cb(struct bufferevent *bev, void *user_data)
 {
 	struct evbuffer *input = bufferevent_get_input(bev);
@@ -652,11 +645,6 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
         return;
     }
 
-    if (!check_resource_exist(rr->url)) {
-        send_error_reply(404);
-        return;
-    }
-
     ret = make_response(rr, &response_str);
     if (!response_str) {
         send_error_reply(ret);
@@ -680,7 +668,8 @@ static void cc_write_cb(struct bufferevent *bev, void *user_data)
 {
 	struct evbuffer *output = bufferevent_get_output(bev);
 	if (evbuffer_get_length(output) == 0) {
-		printf("flushed answer\n");
+        ;
+		//printf("flushed answer\n");
 		//bufferevent_free(bev);
 	}
 }
@@ -787,6 +776,7 @@ int main(int argc, char **argv)
     memset(url, 0, 1024);
     strncat(url, "rtsp://", 7);
     strncat(url, active_addr, strlen(active_addr));
+    snprintf(url + strlen(url), 1024, ":%d", PORT);
     alloc_rtsp_uri(url);
     /////////////////////////////////////////////////////
 
@@ -801,7 +791,8 @@ int main(int argc, char **argv)
     sin.sin_addr.s_addr = inet_addr(active_addr);
 	sin.sin_port = htons(PORT);
 
-	listener = evconnlistener_new_bind(base, cc_listener_cb, (void *)base, LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1, (struct sockaddr*)&sin, sizeof(sin));
+	listener = evconnlistener_new_bind(base, cc_listener_cb, (void *)base,
+            LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1, (struct sockaddr*)&sin, sizeof(sin));
 	if (!listener) {
 		fprintf(stderr, "Could not create a listener!\n");
 		return 1;
