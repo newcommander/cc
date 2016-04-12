@@ -1,3 +1,6 @@
+#ifndef RTSP_H
+#define RTSP_H
+
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
 #include <event2/listener.h>
@@ -84,12 +87,15 @@ typedef struct {
 
 typedef struct {
     int method;
-    rtsp_uri *uri;
+    char *url;
     char version[33];
     rtsp_request_header rh;
+    struct bufferevent *bev;
 } rtsp_request;
 
 typedef struct {
-    struct bufferevent *bev;
     rtsp_uri *uri;
+    struct bufferevent *bev;
 } rtsp_session;
+
+#endif
