@@ -12,42 +12,70 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <time.h>
+#include <ifaddrs.h>
+#include <arpa/inet.h>
 #include <sys/time.h>
 
 #include "rtsp.h"
 
-static const char MESSAGE[] = "Hello, World!\n";
+#define msleep(x) \
+    do { \
+        struct timespec time_to_wait; \
+        time_to_wait.tv_sec = 0; \
+        time_to_wait.tv_nsec = 1000 * 1000 * x; \
+        nanosleep(&time_to_wait, NULL); \
+    } while(0)
 
+static const char MESSAGE[] = "Hello, World!\n";
+static char active_addr[16];
 static const int PORT = 554;
 
-rtsp_uri* alloc_rtsp_uri()
+static rtsp_uri *g_uri = NULL;
+
+rtsp_uri* alloc_rtsp_uri(char *url)
 {
-    // FIXME : alloc and add to list
-    return NULL;
+    rtsp_uri *uri = NULL;
+    uri = (rtsp_uri*)calloc(1, sizeof(rtsp_uri));
+    if (!uri) {
+        printf("%s: calloc failed for rtsp_uri\n", __func__);
+        return NULL;
+    }
+    uri->url = (char*)calloc(1, strlen(url) + 1);
+    if (!uri->url) {
+        printf("%s: calloc failed for url of uri\n", __func__);
+        free(uri);
+        return NULL;
+    }
+    strncpy(uri->url, url, strlen(url));
+    // FIXME : add to list
+    g_uri = uri;
+    return uri;
 }
 
 void release_rtsp_uri(rtsp_uri *uri)
 {
     if (!uri)
         return;
-    free(rui->url);
+    free(uri->url);
     // FIXME : handle the list
     free(uri);
 }
 
 rtsp_uri* find_rtsp_uri(char *url)
 {
+    rtsp_uri *uri = NULL;
     if (!url)
         return NULL;
     // FIXME : find in list
-    return NULL;
+    uri = g_uri;
+    return uri;
 }
 
 void release_rtsp_request(rtsp_request *rr)
 {
     if (!rr)
         return;
-    release_rtsp_uri(rr->uri);
+    free(rr->url);
     free(rr->rh.accept);
     free(rr->rh.user_agent);
     free(rr);
@@ -205,12 +233,12 @@ static int make_entity_header(rtsp_session *rs, char **buf, int sdp_len)
     memset(sdp_len_str, 0, 32);
     snprintf(sdp_len_str, 32, "%d", sdp_len);
 
-    *buf = (char*)calloc(strlen(rs->uri) + strlen(sdp_len_str) + 66, 1);
+    *buf = (char*)calloc(strlen(rs->uri->url) + strlen(sdp_len_str) + 66, 1);
     if (!(*buf)) {
         printf("%s: calloc failed\n", __func__);
         return -1;
     }
-    snprintf(*buf, strlen(rs->uri) + 17, "Content-Base: %s\r\n", rs->uri);
+    snprintf(*buf, strlen(rs->uri->url) + 17, "Content-Base: %s\r\n", rs->uri->url);
     strncat(*buf, "Content-type: application/sdp\r\n", 31);
     snprintf((*buf) + strlen(*buf), strlen(sdp_len_str) + 19, "Content-length: %s\r\n", sdp_len_str);
 
@@ -219,23 +247,34 @@ static int make_entity_header(rtsp_session *rs, char **buf, int sdp_len)
 
 static int make_sdp_string(char **buf)
 {
-    char *version_str = "v=0\r\n";
+    char *version = "v=0\r\n";
     char origin[1024];
     struct timeval tv;
+
+    if (!buf) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
 
     gettimeofday(&tv, NULL);
 
     memset(origin, 0, 1024);
 
     strncat(origin, "o=- ", 6);
-    snprintf(origin + strlen(origin), 20, "%ld.%ld ", tv.sec, tv.usec);
+    snprintf(origin + strlen(origin), 20, "%ld.%ld ", tv.tv_sec, tv.tv_usec);
     strncat(origin, "1 IN IP4 ", 9);
+    strncat(origin, active_addr, strlen(active_addr));
+    strncat(origin, "\r\n", 2);
 
+    *buf = (char*)calloc(strlen(version) + strlen(origin), 1);
     if (!(*buf)) {
-        printf("%s: Invalid parameter\n", __func__);
+        printf("%s: calloc failed\n", __func__);
         return -1;
     }
-    ;
+    strncat(*buf, version, strlen(version));
+    strncat(*buf, origin, strlen(origin));
+
+    return 0;
 }
 
 static rtsp_session* create_rtsp_session(rtsp_request *rr)
@@ -259,62 +298,92 @@ static rtsp_session* create_rtsp_session(rtsp_request *rr)
         printf("%s: No uri '%s' found");
         return NULL;
     }
+    pthread_mutex_lock(&uri->ref_mutex);
+    uri->ref++;
+    pthread_mutex_unlock(&uri->ref_mutex);
     rs->uri = uri;
     rs->bev = rr->bev;
 
     return rs;
 }
 
-static int make_response_for_describe(rtsp_request *rr, char **buf)
+static void release_rtsp_session(rtsp_session *rs)
+{
+    struct evbuffer *output = NULL;
+    int count = 0;
+
+    if (!rs)
+        return;
+
+    output = bufferevent_get_output(rs->bev);
+    while (evbuffer_get_length(output)) {
+        msleep(100);
+        if (count > 10)
+            break;
+    }
+    bufferevent_free(rs->bev);
+
+    pthread_mutex_lock(&rs->uri->ref_mutex);
+    rs->uri->ref--;
+    pthread_mutex_unlock(&rs->uri->ref_mutex);
+
+    free(rs);
+}
+
+static int make_response_for_describe(rtsp_request *rr, char **response)
 {
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL, *entity_header = NULL, *sdp_str = NULL;
     int len = 0;
     rtsp_session *rs = NULL;
 
-    if (!buf || !rr || !rr->rh.accept) {
+    if (!response || !rr || !rr->rh.accept) {
         printf("%s: Invalid parameter\n", __func__);
-        *buf = NULL;
+        *response = NULL;
         return 500;
     }
 
     if (!strstr(rr->rh.accept, "application/sdp")) {
         printf("%s: Only accept application/sdp\n", __func__);
-        *buf = NULL;
+        *response = NULL;
         return 406;
     }
 
-    ret = make_status_line(&status_line, "200", NULL);
+    make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto out;
-    ret = make_response_cseq(&cseq_str, cseq);
+    make_response_cseq(&cseq_str, rr->rh.cseq);
     if (!cseq_str)
         goto out;
-    ret = make_response_date(&date_str);
+    make_response_date(&date_str);
     if (!cseq_str)
         goto out;
     rs = create_rtsp_session(rr);
     if (!rs)
         goto out;
-    make_sdp_string(rs, &sdp_str);
+    make_sdp_string(&sdp_str);
     if (!sdp_str)
         goto out;
-    make_entity_header(&entity_header, rr->uri, strlen(sdp_str));
+    make_entity_header(rs, &entity_header, strlen(sdp_str));
     if (!entity_header) {
         release_rtsp_session(rs);
         goto out;
     }
-    *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(public) + 13, 1);
+
+    len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(entity_header) + 2 + strlen(sdp_str) + 1;
+    *response = (char*)calloc(len, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
         release_rtsp_session(rs);
         goto out;
     }
-    snprintf(*response, strlen(status_line) + 1, status_line);
+    strncat(*response, status_line, strlen(status_line));
     strncat(*response, cseq_str, strlen(cseq_str));
     strncat(*response, date_str, strlen(date_str));
-    snprintf((*response) + strlen(*response), strlen(entity_header) + 1, "%s", entity_header);
+    strncat(*response, entity_header, strlen(entity_header));
     strncat(*response, "\r\n", 2);
     strncat(*response, sdp_str, strlen(sdp_str));
+
+    printf("----------------\n%s\n", *response);
 
     return 0;
 
@@ -325,6 +394,8 @@ out:
         free(cseq_str);
     if (date_str)
         free(date_str);
+    if (entity_header)
+        free(entity_header);
     if (sdp_str)
         free(sdp_str);
     return 500;
@@ -346,7 +417,7 @@ static int make_response(rtsp_request *rr, char **buf)
             printf("%s: Failed making response for OPTIONS\n", __func__);
         break;
     case MTH_DESCRIBE:
-        ret = make_response_for_describe(buf, &rr->rh);
+        ret = make_response_for_describe(rr, buf);
         if (ret != 0)
             printf("%s: Failed making response for DESCRIBE\n", __func__);
         break;
@@ -411,7 +482,7 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
         return 400;
     }
     rr->url = (char*)calloc(p_tail - p_head, 1);
-    if (!rr->uri) {
+    if (!rr->url) {
         printf("calloc for uri failed\n");
         return 500;
     }
@@ -420,7 +491,7 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
     for (p_head = ++p_tail; *p_tail != '\r' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != '\r') {
         printf("Invalid RTSP request when get version\n");
-        free(rr->uri);
+        free(rr->url);
         return 400;
     }
 
@@ -513,7 +584,7 @@ static int convert_rtsp_request(rtsp_request **rr, struct bufferevent *bev, char
 
     if (!buf) {
         printf("%s: Invalid parameter\n", __func__);
-        return NULL;
+        return 500;
     }
 
     *rr = (rtsp_request*)calloc(1, sizeof(rtsp_request));
@@ -521,7 +592,7 @@ static int convert_rtsp_request(rtsp_request **rr, struct bufferevent *bev, char
         printf("%s: calloc RTSP request failed\n", __func__);
         return 500;
     }
-    rr->bev = bev;
+    (*rr)->bev = bev;
 
     ret = get_request_line(*rr, buf, len);
     if (ret != 0) {
@@ -574,7 +645,7 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
     while ((offset = bufferevent_read(bev, p, sizeof(buf))) > 0)
         p += offset;
 
-    ret = convert_rtsp_request(&rr, buf, len);
+    ret = convert_rtsp_request(&rr, bev, buf, len);
     free(buf);
     if (!rr) {
         send_error_reply(ret);
@@ -658,13 +729,66 @@ static void cc_signal_cb(evutil_socket_t sig, short events, void *user_data)
 	event_base_loopexit(base, &delay);
 }
 
+int get_active_address(char *interface, char *buf, int len)
+{
+    struct sockaddr_in *sin = NULL;
+    struct ifaddrs *ifa = NULL, *iflist = NULL;
+    char *tmp = NULL;
+
+    if (!buf || len <= 0) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+
+    if (!interface) {
+        printf("set active interface to default: eth0\n");
+        interface = "eth0";
+    }
+
+    if (getifaddrs(&iflist)) {
+        printf("%s: getting interface addresses failed: %s\n", __func__, strerror(errno));
+        return -1;
+    }
+
+    for (ifa = iflist; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr->sa_family == AF_INET) {
+            if (!strcmp(interface, ifa->ifa_name)) {
+                sin = (struct sockaddr_in*)ifa->ifa_addr;
+                tmp = inet_ntoa(sin->sin_addr);
+                strncpy(buf, tmp, len < strlen(tmp) ? len : strlen(tmp));
+            }
+        }
+    }
+
+    if (!tmp) {
+        printf("%s: Could not find address for interface %s\n", interface);
+        freeifaddrs(iflist);
+        return -1;
+    }
+
+    freeifaddrs(iflist);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
 	struct event_base *base;
 	struct evconnlistener *listener;
 	struct event *signal_event;
+    char url[1024];
 
 	struct sockaddr_in sin;
+
+    memset(active_addr, 0, sizeof(active_addr));
+    if (get_active_address(NULL, active_addr, sizeof(active_addr)) != 0)
+        return 1;
+
+    /////////////////////////////////////////////////////
+    memset(url, 0, 1024);
+    strncat(url, "rtsp://", 7);
+    strncat(url, active_addr, strlen(active_addr));
+    alloc_rtsp_uri(url);
+    /////////////////////////////////////////////////////
 
 	base = event_base_new();
 	if (!base) {
@@ -674,6 +798,7 @@ int main(int argc, char **argv)
 
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = inet_addr(active_addr);
 	sin.sin_port = htons(PORT);
 
 	listener = evconnlistener_new_bind(base, cc_listener_cb, (void *)base, LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1, (struct sockaddr*)&sin, sizeof(sin));

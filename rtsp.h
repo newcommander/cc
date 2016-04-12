@@ -1,6 +1,8 @@
 #ifndef RTSP_H
 #define RTSP_H
 
+#include <pthread.h>
+
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
 #include <event2/listener.h>
@@ -75,6 +77,8 @@ status_code response_code[] = {
 };
 
 typedef struct {
+    pthread_mutex_t ref_mutex;
+    int ref;
     char *url;
 } rtsp_uri;
 
