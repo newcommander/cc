@@ -67,9 +67,14 @@ void release_rtsp_request(rtsp_request *rr)
 {
     if (!rr)
         return;
-    free(rr->url);
-    free(rr->rh.accept);
-    free(rr->rh.user_agent);
+	if (rr->url)
+        free(rr->url);
+	if (rr->rh.accept)
+        free(rr->rh.accept);
+	if (rr->rh.user_agent)
+        free(rr->rh.user_agent);
+	if (rr->rh.transport)
+        free(rr->rh.transport);
     free(rr);
 }
 
@@ -175,7 +180,7 @@ static int make_response_date(char **time_str)
     return 0;
 }
 
-static int make_response_for_options(char **response, int cseq)
+static int make_response_for_options(int cseq, char **response)
 {
     char *public = "OPTIONS, DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE, GET_PARAMETER, SET_PARAMETER";
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
@@ -383,8 +388,6 @@ static int make_response_for_describe(rtsp_request *rr, char **response)
     strncat(*response, "\r\n", 2);
     strncat(*response, sdp_str, strlen(sdp_str));
 
-    printf("----------------\n%s\n", *response);
-
     return 0;
 
 out:
@@ -401,6 +404,13 @@ out:
     return 500;
 }
 
+static int make_response_for_setup(rtsp_request *rr, char **response)
+{
+	if (!rr->rh.transport)
+		printf("Transport: %s\n", rr->rh.transport);
+	return 0;
+}
+
 static int make_response(rtsp_request *rr, char **buf)
 {
     int ret = 0;
@@ -412,7 +422,7 @@ static int make_response(rtsp_request *rr, char **buf)
     // functions make_response_for_xxx need to return response status code
     switch (rr->method) {
     case MTH_OPTIONS:
-        ret = make_response_for_options(buf, rr->rh.cseq);
+        ret = make_response_for_options(rr->rh.cseq, buf);
         if (ret != 0)
             printf("%s: Failed making response for OPTIONS\n", __func__);
         break;
@@ -421,6 +431,11 @@ static int make_response(rtsp_request *rr, char **buf)
         if (ret != 0)
             printf("%s: Failed making response for DESCRIBE\n", __func__);
         break;
+	case MTH_SETUP:
+		ret = make_response_for_setup(rr, buf);
+		if (ret != 0)
+			printf("%s: Failed making response for SETUP\n", __func__);
+		break;
     default:
         // never here
         printf("%s: Unknow RTSP request method\n", __func__);
@@ -566,6 +581,16 @@ static int get_rtsp_request_header(rtsp_request *rr, char *buf, int len)
             rr->rh.user_agent = (char*)calloc(p_tail - tmp + 1, 1);
             if (rr->rh.user_agent)
                 strncpy(rr->rh.user_agent, tmp, p_tail - tmp);
+        } else if (!strncmp("Transport", p_head, tmp - p_head)) {
+            while (*(++tmp) == ' ') ;
+            if (tmp == p_tail) {
+                p_tail += 2;
+                p_head = p_tail;
+                continue;
+            }
+            rr->rh.transport = (char*)calloc(p_tail - tmp + 1, 1);
+            if (rr->rh.transport)
+                strncpy(rr->rh.transport, tmp, p_tail - tmp);
         } else {
             //strncpy(tmp_buf, p_head, tmp - p_head < 127 ? tmp - p_head : 127);
             //printf("Unknow header: %s\n", tmp_buf);

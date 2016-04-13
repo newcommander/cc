@@ -87,6 +87,7 @@ typedef struct {
     int cseq;
     char *accept;
     char *user_agent;
+	char *transport;
 } rtsp_request_header;
 
 typedef struct {
