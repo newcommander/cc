@@ -32,7 +32,7 @@ rtsp_uri* alloc_rtsp_uri(char *url)
         printf("%s: calloc failed for rtsp_uri\n", __func__);
         return NULL;
     }
-    uri->url = (char*)calloc(1, strlen(url) + 1);
+    uri->url = (char*)calloc(strlen(url) + 1, 1);
     if (!uri->url) {
         printf("%s: calloc failed for url of uri\n", __func__);
         free(uri);
@@ -75,7 +75,6 @@ void release_rtsp_request(rtsp_request *rr)
         free(rr->rh.user_agent);
 	if (rr->rh.transport)
         free(rr->rh.transport);
-    free(rr);
 }
 
 static char* find_phrase_by_code(char *code)
@@ -187,26 +186,25 @@ static int make_response_for_options(int cseq, char **response)
     int ret, len = 0;
 
     ret = make_status_line(&status_line, "200", NULL);
-    if (!status_line)
-        return 500;
+    if (!status_line) {
+		ret = 500;
+		goto out;
+	}
     ret = make_response_cseq(&cseq_str, cseq);
     if (!cseq_str) {
-        free(status_line);
-        return 500;
+        ret = 500;
+        goto out;
     }
     ret = make_response_date(&date_str);
     if (!cseq_str) {
-        free(status_line);
-        free(cseq_str);
-        return 500;
+		ret = 500;
+		goto out;
     }
     *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(public) + 13, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
-        free(status_line);
-        free(cseq_str);
-        free(date_str);
-        return 500;
+		ret = 500;
+		goto out;
     }
     snprintf(*response, strlen(status_line) + 1, status_line);
     strncat(*response, cseq_str, strlen(cseq_str));
@@ -214,28 +212,34 @@ static int make_response_for_options(int cseq, char **response)
     snprintf((*response) + strlen(*response), strlen(public) + 11, "Public: %s\r\n", public);
     strncat(*response, "\r\n", 2);
 
-    free(status_line);
-    free(cseq_str);
-    free(date_str);
-    return 0;
+	ret = 0;
+
+out:
+	if (status_line)
+		free(status_line);
+	if (cseq_str)
+		free(cseq_str);
+	if (date_str)
+		free(date_str);
+    return ret;
 }
 
-static int make_entity_header(rtsp_session *rs, char **buf, int sdp_len)
+static int make_entity_header(rtsp_uri *uri, char **buf, int sdp_len)
 {
     char sdp_len_str[32];
-    if (!buf || !rs || (sdp_len < 0)) {
+    if (!uri || !buf || (sdp_len < 0)) {
         printf("%s: Invalid parameter\n", __func__);
         return -1;
     }
     memset(sdp_len_str, 0, 32);
     snprintf(sdp_len_str, 32, "%d", sdp_len);
 
-    *buf = (char*)calloc(strlen(rs->uri->url) + strlen(sdp_len_str) + 66, 1);
+    *buf = (char*)calloc(strlen(uri->url) + strlen(sdp_len_str) + 66, 1);
     if (!(*buf)) {
         printf("%s: calloc failed\n", __func__);
         return -1;
     }
-    snprintf(*buf, strlen(rs->uri->url) + 17, "Content-Base: %s\r\n", rs->uri->url);
+    snprintf(*buf, strlen(uri->url) + 17, "Content-Base: %s\r\n", uri->url);
     strncat(*buf, "Content-type: application/sdp\r\n", 31);
     snprintf((*buf) + strlen(*buf), strlen(sdp_len_str) + 19, "Content-length: %s\r\n", sdp_len_str);
 
@@ -300,7 +304,7 @@ static rtsp_session* create_rtsp_session(rtsp_request *rr)
 
     uri = find_rtsp_uri(rr->url);
     if (!uri) {
-        printf("%s: No uri '%s' found");
+        printf("%s: No uri '%s' found", __func__, rr->url);
         return NULL;
     }
     pthread_mutex_lock(&uri->ref_mutex);
@@ -339,7 +343,7 @@ static int make_response_for_describe(rtsp_request *rr, char **response)
 {
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL, *entity_header = NULL, *sdp_str = NULL;
     int len = 0;
-    rtsp_session *rs = NULL;
+	rtsp_uri *uri = NULL;
 
     if (!response || !rr || !rr->rh.accept) {
         printf("%s: Invalid parameter\n", __func__);
@@ -353,7 +357,13 @@ static int make_response_for_describe(rtsp_request *rr, char **response)
         return 406;
     }
 
-    make_status_line(&status_line, "200", NULL);
+    uri = find_rtsp_uri(rr->url);
+    if (!uri) {
+        printf("%s: No uri '%s' found", __func__, rr->url);
+        return 404;
+    }
+
+	make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto out;
     make_response_cseq(&cseq_str, rr->rh.cseq);
@@ -362,23 +372,17 @@ static int make_response_for_describe(rtsp_request *rr, char **response)
     make_response_date(&date_str);
     if (!cseq_str)
         goto out;
-    rs = create_rtsp_session(rr);
-    if (!rs)
-        goto out;
     make_sdp_string(&sdp_str);
     if (!sdp_str)
         goto out;
-    make_entity_header(rs, &entity_header, strlen(sdp_str));
-    if (!entity_header) {
-        release_rtsp_session(rs);
+    make_entity_header(uri, &entity_header, strlen(sdp_str));
+    if (!entity_header)
         goto out;
-    }
 
-    len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(entity_header) + 2 + strlen(sdp_str) + 1;
-    *response = (char*)calloc(len, 1);
+    len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(entity_header) + 2 + strlen(sdp_str);
+    *response = (char*)calloc(len + 1, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
-        release_rtsp_session(rs);
         goto out;
     }
     strncat(*response, status_line, strlen(status_line));
@@ -406,8 +410,57 @@ out:
 
 static int make_response_for_setup(rtsp_request *rr, char **response)
 {
-	if (!rr->rh.transport)
-		printf("Transport: %s\n", rr->rh.transport);
+    rtsp_session *rs = NULL;
+	char *p_head = NULL, *p_tail = NULL, *p_tmp = NULL;
+	char *protocol = NULL, *mode = NULL;
+	char c_rtp_port = 0, c_rtcp_port = 0, s_rtp_port = 0, s_rtcp_port = 0;
+	int ret, len;
+
+	if (!rr || !rr->rh.transport) {
+		printf("%s: Could not find request header 'Transport'\n", __func__);
+		return 400;
+	}
+	len = strlen(rr->rh.transport);
+
+	p_head = rr->rh.transport;
+	p_tail = rr->rh.transport;
+	while (p_tail < rr->rh.transport + len) {
+		p_tail = strstr(p_head, ";");
+		if (!p_tail)
+			p_tail = rr->rh.transport + len;
+		if (!strncmp(p_head, "RTP/AVP/UDP", p_tail - p_head))
+			protocol = "RTP/AVP/UDP";
+		else if (!strncmp(p_head, "unicast", p_tail - p_head))
+			mode = "unicast";
+		else if (p_tmp = strstr(p_head, "=")) {
+			if (!strncmp(p_head, "client_port", p_tail - p_head)) {
+				p_head = ++p_tmp;
+				if (p_tmp = strstr(p_head, "-")) {
+					char port[10];
+					memset(port, 0, 10);
+					memcpy(port, p_head, 10 < p_tmp - p_head ? 10 : p_tmp - p_head);
+					c_rtp_port = atoi(port);
+					p_head = ++p_tmp;
+					memset(port, 0, 10);
+					memcpy(port, p_head, 10 < p_tail - p_head ? 10 : p_tail - p_head);
+					c_rtcp_port = atoi(port);
+				} else {
+					printf("%s: bad client port in RTSP request\n", __func__);
+					return 400;
+				}
+			}
+		}
+	}
+	if (!protocol || !mode || !c_rtp_port || !c_rtcp_port) {
+		printf("%s: bad RTSP request\n", __func__);
+		return 400;
+	}
+	printf("ok\n");
+    rs = create_rtsp_session(rr);
+    if (!rs)
+        goto out;
+	release_rtsp_session(rs);
+out:
 	return 0;
 }
 
@@ -496,7 +549,7 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
         printf("Invalid protocol: %s\n", p_head);
         return 400;
     }
-    rr->url = (char*)calloc(p_tail - p_head, 1);
+    rr->url = (char*)calloc(p_tail - p_head + 1, 1);
     if (!rr->url) {
         printf("calloc for uri failed\n");
         return 500;
@@ -512,6 +565,7 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
 
     if (p_tail - p_head > 32) {
         printf("version string too long\n");
+        free(rr->url);
         return 505;
     }
     strncpy(rr->version, p_head, p_tail - p_head);
@@ -671,12 +725,11 @@ static void cc_read_cb(struct bufferevent *bev, void *user_data)
     }
 
     ret = make_response(rr, &response_str);
+    release_rtsp_request(rr);
     if (!response_str) {
         send_error_reply(ret);
-        free(rr);
         return;
     }
-    free(rr);
 
     bufferevent_write(bev, response_str, strlen(response_str));
     //FIXME do free in write callback
