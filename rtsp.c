@@ -413,7 +413,7 @@ static int make_response_for_setup(rtsp_request *rr, char **response)
     rtsp_session *rs = NULL;
 	char *p_head = NULL, *p_tail = NULL, *p_tmp = NULL;
 	char *protocol = NULL, *mode = NULL;
-	char c_rtp_port = 0, c_rtcp_port = 0, s_rtp_port = 0, s_rtcp_port = 0;
+	int c_rtp_port = 0, c_rtcp_port = 0, s_rtp_port = 0, s_rtcp_port = 0;
 	int ret, len;
 
 	if (!rr || !rr->rh.transport) {
@@ -433,7 +433,7 @@ static int make_response_for_setup(rtsp_request *rr, char **response)
 		else if (!strncmp(p_head, "unicast", p_tail - p_head))
 			mode = "unicast";
 		else if (p_tmp = strstr(p_head, "=")) {
-			if (!strncmp(p_head, "client_port", p_tail - p_head)) {
+			if (!strncmp(p_head, "client_port", p_tmp - p_head)) {
 				p_head = ++p_tmp;
 				if (p_tmp = strstr(p_head, "-")) {
 					char port[10];
@@ -450,6 +450,7 @@ static int make_response_for_setup(rtsp_request *rr, char **response)
 				}
 			}
 		}
+        p_head = p_tail + 1;
 	}
 	if (!protocol || !mode || !c_rtp_port || !c_rtcp_port) {
 		printf("%s: bad RTSP request\n", __func__);
