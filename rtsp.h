@@ -8,6 +8,7 @@
 #include <event2/listener.h>
 #include <event2/util.h>
 #include <event2/event.h>
+#include <uv.h>
 
 #define MTH_DESCRIBE        1
 #define MTH_ANNOUNCE        2
@@ -88,6 +89,8 @@ typedef struct {
     char *accept;
     char *user_agent;
 	char *transport;
+    char *range;
+    char session_id[33];
 } rtsp_request_header;
 
 typedef struct {
@@ -100,6 +103,13 @@ typedef struct {
 
 typedef struct {
     rtsp_uri *uri;
+    uv_loop_t rtp_loop;
+    uv_loop_t rtcp_loop;
+    uv_udp_t rtp_handle;
+    uv_udp_t rtcp_handle;
+    struct sockaddr_in rtp_addr;
+    struct sockaddr_in rtcp_addr;
+    char session_id[32];
     struct bufferevent *bev;
 } rtsp_session;
 
