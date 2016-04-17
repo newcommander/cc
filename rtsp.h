@@ -10,6 +10,8 @@
 #include <event2/event.h>
 #include <uv.h>
 
+#include "cc_list.h"
+
 #define MTH_DESCRIBE        1
 #define MTH_ANNOUNCE        2
 #define MTH_GET_PARAMETER   3
@@ -78,6 +80,7 @@ status_code response_code[] = {
 };
 
 typedef struct {
+    struct cc_list_head list;
     pthread_mutex_t ref_mutex;
     int ref;
     char *url;
@@ -102,6 +105,7 @@ typedef struct {
 } rtsp_request;
 
 typedef struct {
+    struct cc_list_head list;
     rtsp_uri *uri;
     uv_loop_t rtp_loop;
     uv_loop_t rtcp_loop;

@@ -1,3 +1,5 @@
+// RTSP(rfc2326) https://tools.ietf.org/html/rfc2326
+
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -23,11 +25,19 @@ static const char MESSAGE[] = "Hello, World!\n";
 static char active_addr[16];
 static const int PORT = 554;
 
+struct cc_list_head uri_list;
+struct cc_list_head session_list;
+
 static rtsp_uri *g_uri = NULL;
 
 rtsp_uri* alloc_rtsp_uri(char *url)
 {
     rtsp_uri *uri = NULL;
+    if (!url) {
+        printf("%s: Invalid parameter\n", __func__);
+        return NULL;
+    }
+
     uri = (rtsp_uri*)calloc(1, sizeof(rtsp_uri));
     if (!uri) {
         printf("%s: calloc failed for rtsp_uri\n", __func__);
@@ -43,8 +53,7 @@ rtsp_uri* alloc_rtsp_uri(char *url)
     }
     strncpy(uri->url, url, strlen(url));
 
-    // FIXME : add to list
-    g_uri = uri;
+    cc_list_add_tail(&uri->list, &uri_list);
     return uri;
 }
 
@@ -56,20 +65,26 @@ void release_rtsp_uri(rtsp_uri *uri)
     pthread_mutex_lock(&uri->ref_mutex);
     ref = uri->ref;
     pthread_mutex_unlock(&uri->ref_mutex);
+
     if (ref > 0)
         return;
-    // FIXME : handle the list
+
+    cc_list_del(&uri->list);
     free(uri->url);
     free(uri);
 }
 
 rtsp_uri* find_rtsp_uri(char *url)
 {
-    rtsp_uri *uri = NULL;
+    rtsp_uri *uri = NULL, *p = NULL;
     if (!url)
         return NULL;
-    // FIXME : find in list
-    uri = g_uri;
+    cc_list_for_each_entry (p, &uri_list, list) {
+        if (!strcmp(p->url, url)) {
+            uri = p;
+            break;
+        }
+    }
     return uri;
 }
 
@@ -370,6 +385,8 @@ static rtsp_session* create_rtsp_session(rtsp_request *rr)
     gettimeofday(&tv, NULL);
     snprintf(rs->session_id, 9, "%04x%04x", tv.tv_usec, rand());
 
+    cc_list_add_tail(&rs->list, &session_list);
+
     return rs;
 
 failed:
@@ -392,6 +409,8 @@ static void release_rtsp_session(rtsp_session *rs)
     if (!rs)
         return;
 
+    cc_list_del(&rs->list);
+
     output = bufferevent_get_output(rs->bev);
     while (evbuffer_get_length(output)) {
         msleep(100);
@@ -413,6 +432,20 @@ static void release_rtsp_session(rtsp_session *rs)
     pthread_mutex_unlock(&rs->uri->ref_mutex);
 
     free(rs);
+}
+
+static rtsp_session* find_rtsp_session_by_id(char *session_id)
+{
+    rtsp_session *rs = NULL, *p = NULL;
+    if (!session_id)
+        return NULL;
+    cc_list_for_each_entry (p, &session_list, list) {
+        if (!strcmp(p->session_id, session_id)) {
+            rs = p;
+            break;
+        }
+    }
+    return rs;
 }
 
 static int make_response_for_describe(rtsp_request *rr, char **response)
@@ -586,10 +619,15 @@ failed:
 
 static int make_response_for_play(rtsp_request *rr, char **response)
 {
+    rtsp_session *rs = NULL;
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
     int len;
 
-	make_status_line(&status_line, "200", NULL);
+    rs = find_rtsp_session_by_id(rr->rh.session_id);
+    if (!rs)
+        return 454;
+
+    make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto failed;
     make_response_cseq(&cseq_str, rr->rh.cseq);
@@ -608,6 +646,7 @@ static int make_response_for_play(rtsp_request *rr, char **response)
     strncat(*response, status_line, strlen(status_line));
     strncat(*response, cseq_str, strlen(cseq_str));
     strncat(*response, date_str, strlen(date_str));
+    strncat(*response, "\r\n", 2);
 
     free(status_line);
     free(cseq_str);
@@ -1020,6 +1059,9 @@ int main(int argc, char **argv)
     char url[1024];
 
 	struct sockaddr_in sin;
+
+    CC_INIT_LIST_HEAD(&uri_list);
+    CC_INIT_LIST_HEAD(&session_list);
 
     memset(active_addr, 0, sizeof(active_addr));
     if (get_active_address(NULL, active_addr, sizeof(active_addr)) != 0)
