@@ -208,7 +208,7 @@ static int make_response_date(char **time_str)
 
 static int make_response_for_options(int cseq, char **response)
 {
-    char *public = "OPTIONS, DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE, GET_PARAMETER, SET_PARAMETER";
+    char *public = "OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN";
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
     int ret;
 
@@ -627,6 +627,8 @@ static int make_response_for_play(rtsp_request *rr, char **response)
     if (!rs)
         return 454;
 
+    // play
+
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto failed;
@@ -661,6 +663,54 @@ failed:
         free(date_str);
     return 500;
 }
+
+static int make_response_for_teardown(rtsp_request *rr, char **response)
+{
+    rtsp_session *rs = NULL;
+    char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
+    int len;
+
+    rs = find_rtsp_session_by_id(rr->rh.session_id);
+    if (!rs)
+        return 454;
+
+    // teardown
+
+    make_status_line(&status_line, "200", NULL);
+    if (!status_line)
+        goto failed;
+    make_response_cseq(&cseq_str, rr->rh.cseq);
+    if (!cseq_str)
+        goto failed;
+    make_response_date(&date_str);
+    if (!cseq_str)
+        goto failed;
+
+    len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + 120;
+    *response = (char*)calloc(len, 1);
+    if (!(*response)) {
+        printf("%s: calloc failed\n", __func__);
+        goto failed;
+    }
+    strncat(*response, status_line, strlen(status_line));
+    strncat(*response, cseq_str, strlen(cseq_str));
+    strncat(*response, date_str, strlen(date_str));
+    strncat(*response, "\r\n", 2);
+
+    free(status_line);
+    free(cseq_str);
+    free(date_str);
+    return 0;
+failed:
+    if (status_line)
+        free(status_line);
+    if (cseq_str)
+        free(cseq_str);
+    if (date_str)
+        free(date_str);
+    return 500;
+}
+
 static int make_response(rtsp_request *rr, char **buf)
 {
     int ret = 0;
@@ -689,12 +739,16 @@ static int make_response(rtsp_request *rr, char **buf)
     case MTH_PLAY:
         ret = make_response_for_play(rr, buf);
         if (ret != 0)
-            printf("%s: Faild making response for PLAY\n", __func__);
+            printf("%s: Failed making response for PLAY\n", __func__);
+        break;
+    case MTH_TEARDOWN:
+        ret = make_response_for_teardown(rr, buf);
+        if (ret != 0)
+            printf("%s: Failed making response for TEARDOWN\n", __func__);
         break;
     default:
-        // never here
-        printf("%s: Unknow RTSP request method\n", __func__);
-        return 500;
+        printf("%s: Unknow RTSP request method (code: %d)\n", __func__, rr->method);
+        return 405;
     }
     return ret;
 }
