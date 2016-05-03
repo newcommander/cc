@@ -30,6 +30,7 @@ void* rtp_dispatch(void *arg)
     int ret, c_port = 0, s_port = 0;
     rtsp_session *rs = (rtsp_session*)arg;
     printf("rtp: %s\n", rs->client_addr);
+    return NULL;
 
     ret = uv_loop_init(&loop);
     if (ret) {

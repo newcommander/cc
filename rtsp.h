@@ -8,6 +8,7 @@
 #include <event2/util.h>
 #include <event2/event.h>
 #include <uv.h>
+#include <pthread.h>
 
 #include "list.h"
 #include "uri.h"
@@ -104,6 +105,8 @@ typedef struct {
 #define SESION_IN_FREE 2
     int status;
     char session_id[32];
+    pthread_t rtp_thread;
+    pthread_t rtcp_thread;
     Uri *uri;
     uv_loop_t rtp_loop;
     uv_loop_t rtcp_loop;

@@ -11,7 +11,6 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <pthread.h>
 
 #include "rtsp.h"
 
@@ -221,8 +220,8 @@ static int make_sdp_string(char **buf)
     char origin[1024];
     char *session_name = "s=live from cc\r\n";
     char *time = "t=0 0\r\n";
-    char *media_desc = "m=video 0 RTP/AVP 96\r\n";
-    char *media_attr = "a=rtpmap:96 H264/90000\r\n";    // how to set this attribute ???
+    char *media_desc = "m=video 0 RTP/AVP 96\r\nc=IN IP4 0.0.0.0\r\nb=AS:500\r\n";
+    char *media_attr = "a=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z2QAH6zZQEAEmhAAAAMAEAAAAwMo8YMZYA==,aOvjyyLA\r\n";    // how to set this attribute ???
     struct timeval tv;
 
     if (!buf) {
@@ -278,17 +277,17 @@ static rtsp_session* create_rtsp_session(rtsp_request *rr, int c_rtp_port, int c
         return NULL;
     }
 
-    ret = getpeername(rs->bev->ev_read.ev_fd, &clit_addr, &addr_len);
+    ret = getpeername(rr->bev->ev_read.ev_fd, &clit_addr, &addr_len);
     if (ret != 0) {
         printf("%s: getpername failed: %s\n", __func__, strerror(errno));
         release_uri(uri);
         return NULL;
     }
-    if (clit_addr.sa_family != AF_INET) {
-        printf("%s: Only serves on IPv4\n", __func__);
-        release_uri(uri);
-        return NULL;
-    }
+//    if (clit_addr.sa_family != AF_INET) {
+//        printf("%s: Only serves on IPv4\n", __func__);
+//        release_uri(uri);
+//        return NULL;
+//    }
     clit_addr_in = (struct sockaddr_in*)&clit_addr;
     memset(clit_ip, 0, 16);
     snprintf(clit_ip, addr_len < 16 ? addr_len : 16, "%s", inet_ntoa(clit_addr_in->sin_addr));
@@ -425,7 +424,7 @@ static rtsp_session* find_rtsp_session_by_id(char *session_id)
             break;
         }
     }
-    pthread_mutex_lock(&session_mutex);
+    pthread_mutex_unlock(&session_mutex);
     return rs;
 }
 
@@ -449,7 +448,7 @@ static int make_response_for_describe(rtsp_request *rr, char **response)
 
     uri = get_uri(rr->url);
     if (!uri) {
-        printf("%s: No uri '%s' found", __func__, rr->url);
+        printf("%s: No uri '%s' found\n", __func__, rr->url);
         return 404;
     }
 
@@ -598,6 +597,7 @@ failed:
     return 500;
 }
 
+extern void* rtp_dispatch(void *arg);
 static int make_response_for_play(rtsp_request *rr, char **response)
 {
     rtsp_session *rs = NULL;
@@ -609,6 +609,10 @@ static int make_response_for_play(rtsp_request *rr, char **response)
         return 454;
 
     // play
+    if (pthread_create(&rs->rtp_thread, NULL, rtp_dispatch, rs) != 0) {
+        printf("%s: creating rtp thread failed: %s\n", __func__, strerror(errno));
+        return 500;
+    }
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
@@ -736,7 +740,7 @@ static int make_response(rtsp_request *rr, char **buf)
 
 static int get_request_line(rtsp_request *rr, char *buf, int len)
 {
-    char *p_head = NULL, *p_tail = NULL;
+    char *p_head = NULL, *p_tail = NULL, *tmp = NULL;
 
     if (!rr || !buf) {
         printf("Invalid parameter\n");
@@ -758,7 +762,7 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
     } else if (!strncmp("PLAY", p_head, p_tail - p_head)) {
         rr->method = MTH_PLAY;
     } else if (!strncmp("PAUSE", p_head, p_tail - p_head)) {
-        rr->method = MTH_PAUSE;
+        return 405;
     } else if (!strncmp("TEARDOWN", p_head, p_tail - p_head)) {
         rr->method = MTH_TEARDOWN;
     } else if (!strncmp("RECORD", p_head, p_tail - p_head)) {
@@ -766,11 +770,11 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
     } else if (!strncmp("ANNOUNCE", p_head, p_tail - p_head)) {
         return 405;
     } else if (!strncmp("GET_PARAMETER", p_head, p_tail - p_head)) {
-        rr->method = MTH_GET_PARAMETER;
+        return 405;
     } else if (!strncmp("REDIRECT", p_head, p_tail - p_head)) {
         return 405;
     } else if (!strncmp("SET_PARAMETER", p_head, p_tail - p_head)) {
-        rr->method = MTH_SET_PARAMETER;
+        return 405;
     } else {
         printf("%s: Unknow RTSP request recived: %s\n", __func__, p_head);
         return 400;
@@ -786,12 +790,16 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
         printf("Invalid protocol: %s\n", p_head);
         return 400;
     }
-    rr->url = (char*)calloc(p_tail - p_head + 1, 1);
+    for (tmp = p_head + 7; tmp < p_tail; tmp++) {
+        if (*tmp == ':')
+            break;
+    }
+    rr->url = (char*)calloc(tmp - p_head + 1, 1);
     if (!rr->url) {
         printf("calloc for url failed\n");
         return 500;
     }
-    strncpy(rr->url, p_head, p_tail - p_head);
+    strncpy(rr->url, p_head, tmp - p_head);
 
     for (p_head = ++p_tail; *p_tail != '\r' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != '\r') {
@@ -942,13 +950,49 @@ static int convert_rtsp_request(rtsp_request **rr, struct bufferevent *bev, char
     return 0;
 }
 
-void send_error_reply(int code)
+void error_reply(int code, int cseq, char **response)
 {
+    char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
+    char code_buf[32];
+
     if (code <= 0) {
         printf("%s: bad status code: %d\n", __func__, code);
         ; // TODO
     }
-    // FIXME : send error reply
+    snprintf(code_buf, 32, "%d", code);
+
+    make_status_line(&status_line, code_buf, NULL);
+    if (!status_line) {
+		printf("%s: error");
+		goto out;
+	}
+    make_response_cseq(&cseq_str, cseq);
+    if (!cseq_str) {
+		printf("%s: error");
+        goto out;
+    }
+    make_response_date(&date_str);
+    if (!cseq_str) {
+		printf("%s: error");
+		goto out;
+    }
+    *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + 13, 1);
+    if (!(*response)) {
+        printf("%s: calloc failed\n", __func__);
+		goto out;
+    }
+    snprintf(*response, strlen(status_line) + 1, status_line);
+    strncat(*response, cseq_str, strlen(cseq_str));
+    strncat(*response, date_str, strlen(date_str));
+    strncat(*response, "\r\n", 2);
+
+out:
+	if (status_line)
+		free(status_line);
+	if (cseq_str)
+		free(cseq_str);
+	if (date_str)
+		free(date_str);
 }
 
 static void read_cb(struct bufferevent *bev, void *user_data)
@@ -962,8 +1006,8 @@ static void read_cb(struct bufferevent *bev, void *user_data)
     char *buf = (char*)calloc(len + 1, 1);
     if (!buf) {
         printf("%s: calloc failed\n", __func__);
-        send_error_reply(500);
-        return;
+        error_reply(500, 0, &response_str); // FIXME: parameter 2
+        goto reply;
     }
 
     char *p = buf;
@@ -974,20 +1018,24 @@ static void read_cb(struct bufferevent *bev, void *user_data)
     ret = convert_rtsp_request(&rr, bev, buf, len);
     free(buf);
     if (!rr) {
-        send_error_reply(ret);
-        return;
+        error_reply(ret, 0, &response_str); // FIXME: parameter 2
+        goto reply;
     }
 
     ret = make_response(rr, &response_str);
-    release_rtsp_request(rr);
-    if (!response_str) {
-        send_error_reply(ret);
-        return;
+    if (ret != 0) {
+        if (response_str)
+            free(response_str);
+        response_str = NULL;
+        error_reply(ret, rr->rh.cseq, &response_str);
     }
+    release_rtsp_request(rr);
 
+reply:
     bufferevent_write(bev, response_str, strlen(response_str));
     //FIXME do free in write callback
-    free(response_str);
+    if (response_str)
+        free(response_str);
     return;
 }
 
@@ -1106,7 +1154,6 @@ int main(int argc, char **argv)
     memset(url, 0, 1024);
     strncat(url, "rtsp://", 7);
     strncat(url, active_addr, strlen(active_addr));
-    snprintf(url + strlen(url), 1024, ":%d", PORT);
     alloc_uri(url);
     /////////////////////////////////////////////////////
 
