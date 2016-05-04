@@ -14,6 +14,54 @@
 
 #include "rtsp.h"
 
+status_code response_code[] = {
+    { "100", "Continue" },
+    { "200", "OK" },
+    { "201", "Created" },
+    { "250", "Low on Storage Space" },
+    { "300", "Multiple Choices" },
+    { "301", "Moved Permanently" },
+    { "302", "Moved Temporarily" },
+    { "303", "See Other" },
+    { "304", "Not Modified" },
+    { "305", "Use Proxy" },
+    { "400", "Bad Request" },
+    { "401", "Unauthorized" },
+    { "402", "Payment Required" },
+    { "403", "Forbidden" },
+    { "404", "Not Found" },
+    { "405", "Method Not Allowed" },
+    { "406", "Not Acceptable" },
+    { "407", "Proxy Authentication Required" },
+    { "408", "Request Time-out" },
+    { "410", "Gone" },
+    { "411", "Length Required" },
+    { "412", "Precondition Failed" },
+    { "413", "Request Entity Too Large" },
+    { "414", "Request-URI Too Large" },
+    { "415", "Unsupported Media Type" },
+    { "451", "Parameter Not Understood" },
+    { "452", "Conference Not Found" },
+    { "453", "Not Enough Bandwidth" },
+    { "454", "Session Not Found" },
+    { "455", "Method Not Valid in This State" },
+    { "456", "Header Field Not Valid for Resource" },
+    { "457", "Invalid Range" },
+    { "458", "Parameter Is Read-Only" },
+    { "459", "Aggregate operation not allowed" },
+    { "460", "Only aggregate operation allowed" },
+    { "461", "Unsupported transport" },
+    { "462", "Destination unreachable" },
+    { "500", "Internal Server Error" },
+    { "501", "Not Implemented" },
+    { "502", "Bad Gateway" },
+    { "503", "Service Unavailable" },
+    { "504", "Gateway Time-out" },
+    { "505", "RTSP Version not supported" },
+    { "551", "Option not supported" },
+    { NULL, NULL }
+};
+
 #define msleep(x) \
     do { \
         struct timespec time_to_wait; \
@@ -1067,7 +1115,6 @@ static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, str
 	struct event_base *base = user_data;
 	struct bufferevent *bev;
 
-    printf("listener\n");
 	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
 	if (!bev) {
 		fprintf(stderr, "Error constructing bufferevent!");
