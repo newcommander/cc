@@ -646,6 +646,7 @@ failed:
 }
 
 extern void* rtp_dispatch(void *arg);
+extern void* rtcp_dispatch(void *arg);
 static int make_response_for_play(rtsp_request *rr, char **response)
 {
     rtsp_session *rs = NULL;
@@ -659,6 +660,11 @@ static int make_response_for_play(rtsp_request *rr, char **response)
     // play
     if (pthread_create(&rs->rtp_thread, NULL, rtp_dispatch, rs) != 0) {
         printf("%s: creating rtp thread failed: %s\n", __func__, strerror(errno));
+        return 500;
+    }
+    if (pthread_create(&rs->rtcp_thread, NULL, rtcp_dispatch, rs) != 0) {
+        printf("%s: creating rtcp thread failed: %s\n", __func__, strerror(errno));
+        pthread_cancel(rs->rtp_thread); // TODO: is this call right ? please check...
         return 500;
     }
 
