@@ -19,7 +19,13 @@ static void send_cb(uv_udp_send_t *req, int status)
 
 static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
 {
-    printf("recv:[%d] %s\n", nread, buf->base);
+	if (nread == 0)
+		return;
+	if (nread < 0) {
+		printf("%s: recive error: %s\n", __func__, uv_strerror(nread));
+		return;
+	}
+    printf("recv:[%d]\n", nread);
 }
 
 void* rtcp_dispatch(void *arg)
