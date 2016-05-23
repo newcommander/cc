@@ -21,6 +21,11 @@ struct rtp_header {
     uint32_t csrc[15];
 };
 
+static void set_version(struct rtp_header *header)
+{
+    header->fix_head = (header->fix_head & ~RTP_VERSION_MASK) | (uint32_t)2 << 30;
+}
+
 static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     buf->base = calloc(suggested_size, 1);
