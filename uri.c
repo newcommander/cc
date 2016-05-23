@@ -112,6 +112,7 @@ Uri* alloc_uri(char *url)
         return NULL;
     }
     strncpy(uri->url, url, strlen(url));
+    uri->ssrc = rand();
 
     pthread_mutex_lock(&uri_mutex);
     list_add_tail(&uri->list, &uri_list);

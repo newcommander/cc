@@ -26,6 +26,53 @@ static void set_version(struct rtp_header *header)
     header->fix_head = (header->fix_head & ~RTP_VERSION_MASK) | (uint32_t)2 << 30;
 }
 
+static void set_padding(struct rtp_header *header)
+{
+    header->fix_head |= (uint32_t)RTP_PADDING_MASK;
+}
+
+static void clear_padding(struct rtp_header *header)
+{
+    header->fix_head &= (uint32_t)~RTP_PADDING_MASK;
+}
+
+static void set_extension(struct rtp_header *header)
+{
+    header->fix_head |= (uint32_t)RTP_EXTSION_MASK;
+}
+
+static void clear_extension(struct rtp_header *header)
+{
+    header->fix_head &= (uint32_t)~RTP_EXTSION_MASK;
+}
+
+static void set_csrc_count(struct rtp_header *header, uint32_t csrc_count)
+{
+    csrc_count &= (uint32_t)0x000f;
+    header->fix_head = (header->fix_head & ~RTP_CSRCCNT_MASK) | csrc_count << 24;
+}
+
+static void set_marker(struct rtp_header *header)
+{
+    header->fix_head |= (uint32_t)RTP_MARKER_MASK;
+}
+
+static void clear_marker(struct rtp_header *header)
+{
+    header->fix_head &= (uint32_t)~RTP_MARKER_MASK;
+}
+
+static void set_payload_type(struct rtp_header *header, uint32_t payload_type)
+{
+    payload_type = payload_type & (uint32_t)0x0000007f;
+    header->fix_head = (header->fix_head & ~RTP_PAYLOAD_MASK) | payload_type << 16;
+}
+
+static void set_seq_num(struct rtp_header *header, uint16_t seq_num)
+{
+    header->fix_head = (header->fix_head & ~RTP_SEQNUMB_MASK) | (uint32_t)seq_num;
+}
+
 static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     buf->base = calloc(suggested_size, 1);
@@ -79,10 +126,40 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
 
 	if ((header.fix_head & RTP_EXTSION_MASK) >> 28) ; // TODO
 
+    if (((header.fix_head & RTP_CSRCCNT_MASK) >> 24) != 0) {
+        printf("%s: not support multiple synchronization source\n");
+        // TODO: destroy rtp session ???
+        return;
+    }
+
 	if ((header.fix_head & RTP_MARKER_MASK) >> 23) ; // TODO
 
 	payload_type = (header.fix_head & RTP_PAYLOAD_MASK) >> 16;
 	seq_num = header.fix_head & RTP_SEQNUMB_MASK;
+}
+
+static void* send_dispatch(void *arg)
+{
+    Uri *uri = (Uri*)arg;
+    struct rtp_header header;
+    uint16_t seq_num = 0;
+
+    memset(&header, 0, sizeof(header));
+    set_version(&header);
+    clear_padding(&header);
+    clear_extension(&header);
+    set_csrc_count(&header, 0);
+    clear_marker(&header);
+    set_payload_type(&header, 85);
+    set_seq_num(&header, seq_num);
+//    set_timestamp(&header);
+    header.ssrc = uri->ssrc;
+
+    while (1) {
+        ;
+    }
+
+    return NULL;
 }
 
 void* rtp_dispatch(void *arg)
@@ -98,9 +175,17 @@ void* rtp_dispatch(void *arg)
         goto out;
     }
 
+    pthread_t send_thread;
+    if (pthread_create(&send_thread, NULL, send_dispatch, rs->uri) != 0) {
+        printf("%s: creating rtp send thread failed: %s\n", __func__, strerror(errno));
+        return NULL;
+    }
+
     uv_run(&rs->rtp_loop, UV_RUN_DEFAULT);
+
+    pthread_join(send_thread, NULL);
 
 out:
     uv_loop_close(&rs->rtp_loop);
-    return 0;
+    return NULL;
 }

@@ -81,13 +81,13 @@ void release_rtsp_request(rtsp_request *rr)
 {
     if (!rr)
         return;
-    if (rr->url)
+	if (rr->url)
         free(rr->url);
-    if (rr->rh.accept)
+	if (rr->rh.accept)
         free(rr->rh.accept);
-    if (rr->rh.user_agent)
+	if (rr->rh.user_agent)
         free(rr->rh.user_agent);
-    if (rr->rh.transport)
+	if (rr->rh.transport)
         free(rr->rh.transport);
     if (rr->rh.range)
         free(rr->rh.range);
@@ -203,9 +203,9 @@ static int make_response_for_options(int cseq, char **response)
 
     ret = make_status_line(&status_line, "200", NULL);
     if (!status_line) {
-        ret = 500;
-        goto out;
-    }
+		ret = 500;
+		goto out;
+	}
     ret = make_response_cseq(&cseq_str, cseq);
     if (!cseq_str) {
         ret = 500;
@@ -213,14 +213,14 @@ static int make_response_for_options(int cseq, char **response)
     }
     ret = make_response_date(&date_str);
     if (!cseq_str) {
-        ret = 500;
-        goto out;
+		ret = 500;
+		goto out;
     }
     *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(public) + 13, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
-        ret = 500;
-        goto out;
+		ret = 500;
+		goto out;
     }
     snprintf(*response, strlen(status_line) + 1, status_line);
     strncat(*response, cseq_str, strlen(cseq_str));
@@ -228,15 +228,15 @@ static int make_response_for_options(int cseq, char **response)
     snprintf((*response) + strlen(*response), strlen(public) + 11, "Public: %s\r\n", public);
     strncat(*response, "\r\n", 2);
 
-    ret = 0;
+	ret = 0;
 
 out:
-    if (status_line)
-        free(status_line);
-    if (cseq_str)
-        free(cseq_str);
-    if (date_str)
-        free(date_str);
+	if (status_line)
+		free(status_line);
+	if (cseq_str)
+		free(cseq_str);
+	if (date_str)
+		free(date_str);
     return ret;
 }
 
@@ -480,7 +480,7 @@ static int make_response_for_describe(rtsp_request *rr, char **response)
 {
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL, *entity_header = NULL, *sdp_str = NULL;
     int len = 0;
-    Uri *uri = NULL;
+	Uri *uri = NULL;
 
     if (!response || !rr || !rr->rh.accept) {
         printf("%s: Invalid parameter\n", __func__);
@@ -500,7 +500,7 @@ static int make_response_for_describe(rtsp_request *rr, char **response)
         return 404;
     }
 
-    make_status_line(&status_line, "200", NULL);
+	make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto out;
     make_response_cseq(&cseq_str, rr->rh.cseq);
@@ -553,58 +553,58 @@ out:
 static int make_response_for_setup(rtsp_request *rr, char **response)
 {
     rtsp_session *rs = NULL;
-    char *p_head = NULL, *p_tail = NULL, *p_tmp = NULL;
-    char *protocol = NULL, *mode = NULL;
+	char *p_head = NULL, *p_tail = NULL, *p_tmp = NULL;
+	char *protocol = NULL, *mode = NULL;
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
-    int c_rtp_port = 0, c_rtcp_port = 0;
-    int len;
+	int c_rtp_port = 0, c_rtcp_port = 0;
+	int len;
 
-    if (!rr || !rr->rh.transport) {
-        printf("%s: Could not find request header 'Transport'\n", __func__);
-        return 400;
-    }
-    len = strlen(rr->rh.transport);
+	if (!rr || !rr->rh.transport) {
+		printf("%s: Could not find request header 'Transport'\n", __func__);
+		return 400;
+	}
+	len = strlen(rr->rh.transport);
 
-    p_head = rr->rh.transport;
-    p_tail = rr->rh.transport;
-    while (p_tail < rr->rh.transport + len) {
-        p_tail = strstr(p_head, ";");
-        if (!p_tail)
-            p_tail = rr->rh.transport + len;
-        if (!strncmp(p_head, "RTP/AVP/UDP", p_tail - p_head))
-            protocol = "RTP/AVP/UDP";
-        else if (!strncmp(p_head, "unicast", p_tail - p_head))
-            mode = "unicast";
-        else if (p_tmp = strstr(p_head, "=")) {
-            if (!strncmp(p_head, "client_port", p_tmp - p_head)) {
-                p_head = ++p_tmp;
-                if (p_tmp = strstr(p_head, "-")) {
-                    char port[10];
-                    memset(port, 0, 10);
-                    memcpy(port, p_head, 10 < p_tmp - p_head ? 10 : p_tmp - p_head);
-                    c_rtp_port = atoi(port);
-                    p_head = ++p_tmp;
-                    memset(port, 0, 10);
-                    memcpy(port, p_head, 10 < p_tail - p_head ? 10 : p_tail - p_head);
-                    c_rtcp_port = atoi(port);
-                } else {
-                    printf("%s: bad client port in RTSP request\n", __func__);
-                    return 400;
-                }
-            }
-        }
+	p_head = rr->rh.transport;
+	p_tail = rr->rh.transport;
+	while (p_tail < rr->rh.transport + len) {
+		p_tail = strstr(p_head, ";");
+		if (!p_tail)
+			p_tail = rr->rh.transport + len;
+		if (!strncmp(p_head, "RTP/AVP/UDP", p_tail - p_head))
+			protocol = "RTP/AVP/UDP";
+		else if (!strncmp(p_head, "unicast", p_tail - p_head))
+			mode = "unicast";
+		else if (p_tmp = strstr(p_head, "=")) {
+			if (!strncmp(p_head, "client_port", p_tmp - p_head)) {
+				p_head = ++p_tmp;
+				if (p_tmp = strstr(p_head, "-")) {
+					char port[10];
+					memset(port, 0, 10);
+					memcpy(port, p_head, 10 < p_tmp - p_head ? 10 : p_tmp - p_head);
+					c_rtp_port = atoi(port);
+					p_head = ++p_tmp;
+					memset(port, 0, 10);
+					memcpy(port, p_head, 10 < p_tail - p_head ? 10 : p_tail - p_head);
+					c_rtcp_port = atoi(port);
+				} else {
+					printf("%s: bad client port in RTSP request\n", __func__);
+					return 400;
+				}
+			}
+		}
         p_head = p_tail + 1;
-    }
-    if (!protocol || !mode || !c_rtp_port || !c_rtcp_port) {
-        printf("%s: bad RTSP request\n", __func__);
-        return 400;
-    }
+	}
+	if (!protocol || !mode || !c_rtp_port || !c_rtcp_port) {
+		printf("%s: bad RTSP request\n", __func__);
+		return 400;
+	}
 
     rs = create_rtsp_session(rr, c_rtp_port, c_rtcp_port);
     if (!rs)
         return 500;
 
-    make_status_line(&status_line, "200", NULL);
+	make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto failed;
     make_response_cseq(&cseq_str, rr->rh.cseq);
@@ -632,7 +632,7 @@ static int make_response_for_setup(rtsp_request *rr, char **response)
     free(status_line);
     free(cseq_str);
     free(date_str);
-    return 0;
+	return 0;
 
 failed:
     if (status_line)
@@ -714,6 +714,7 @@ static int make_response_for_teardown(rtsp_request *rr, char **response)
         return 454;
 
     // teardown
+    release_rtsp_session(rs);
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
@@ -770,11 +771,11 @@ static int make_response(rtsp_request *rr, char **buf)
         if (ret != 0)
             printf("%s: Failed making response for DESCRIBE\n", __func__);
         break;
-    case MTH_SETUP:
-        ret = make_response_for_setup(rr, buf);
-        if (ret != 0)
-            printf("%s: Failed making response for SETUP\n", __func__);
-        break;
+	case MTH_SETUP:
+		ret = make_response_for_setup(rr, buf);
+		if (ret != 0)
+			printf("%s: Failed making response for SETUP\n", __func__);
+		break;
     case MTH_PLAY:
         ret = make_response_for_play(rr, buf);
         if (ret != 0)
@@ -1017,23 +1018,23 @@ void error_reply(int code, int cseq, char **response)
 
     make_status_line(&status_line, code_buf, NULL);
     if (!status_line) {
-        printf("%s: error");
-        goto out;
-    }
+		printf("%s: error");
+		goto out;
+	}
     make_response_cseq(&cseq_str, cseq);
     if (!cseq_str) {
-        printf("%s: error");
+		printf("%s: error");
         goto out;
     }
     make_response_date(&date_str);
     if (!cseq_str) {
-        printf("%s: error");
-        goto out;
+		printf("%s: error");
+		goto out;
     }
     *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + 13, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
-        goto out;
+		goto out;
     }
     snprintf(*response, strlen(status_line) + 1, status_line);
     strncat(*response, cseq_str, strlen(cseq_str));
@@ -1041,17 +1042,17 @@ void error_reply(int code, int cseq, char **response)
     strncat(*response, "\r\n", 2);
 
 out:
-    if (status_line)
-        free(status_line);
-    if (cseq_str)
-        free(cseq_str);
-    if (date_str)
-        free(date_str);
+	if (status_line)
+		free(status_line);
+	if (cseq_str)
+		free(cseq_str);
+	if (date_str)
+		free(date_str);
 }
 
 static void read_cb(struct bufferevent *bev, void *user_data)
 {
-    struct evbuffer *input = bufferevent_get_input(bev);
+	struct evbuffer *input = bufferevent_get_input(bev);
     rtsp_request *rr = NULL;
     char *response_str = NULL;
     int ret = 0;
@@ -1095,55 +1096,55 @@ reply:
 
 static void write_cb(struct bufferevent *bev, void *user_data)
 {
-    struct evbuffer *output = bufferevent_get_output(bev);
-    if (evbuffer_get_length(output) == 0) {
+	struct evbuffer *output = bufferevent_get_output(bev);
+	if (evbuffer_get_length(output) == 0) {
         ;
-        //printf("flushed answer\n");
-        //bufferevent_free(bev);
-    }
+		//printf("flushed answer\n");
+		//bufferevent_free(bev);
+	}
 }
 
 static void event_cb(struct bufferevent *bev, short events, void *user_data)
 {
-    if (events & BEV_EVENT_EOF) {
-        printf("Connection closed.\n");
-    } else if (events & BEV_EVENT_ERROR) {
-        printf("Got an error on the connection: %s\n",
-            strerror(errno));
-    }
-    /* None of the other events can happen here, since we haven't enabled
-     * timeouts */
-    bufferevent_free(bev);
+	if (events & BEV_EVENT_EOF) {
+		printf("Connection closed.\n");
+	} else if (events & BEV_EVENT_ERROR) {
+		printf("Got an error on the connection: %s\n",
+		    strerror(errno));
+	}
+	/* None of the other events can happen here, since we haven't enabled
+	 * timeouts */
+	bufferevent_free(bev);
 }
 
 static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data)
 {
-    struct event_base *base = user_data;
-    struct bufferevent *bev;
+	struct event_base *base = user_data;
+	struct bufferevent *bev;
 
-    bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
-    if (!bev) {
-        fprintf(stderr, "Error constructing bufferevent!");
-        event_base_loopbreak(base);
-        return;
-    }
+	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
+	if (!bev) {
+		fprintf(stderr, "Error constructing bufferevent!");
+		event_base_loopbreak(base);
+		return;
+	}
 
     bufferevent_setcb(bev, read_cb, write_cb, event_cb, NULL);
-    bufferevent_enable(bev, EV_WRITE);
-    bufferevent_enable(bev, EV_READ);
+	bufferevent_enable(bev, EV_WRITE);
+	bufferevent_enable(bev, EV_READ);
 
-    //bufferevent_write(bev, MESSAGE, strlen(MESSAGE));
+	//bufferevent_write(bev, MESSAGE, strlen(MESSAGE));
 }
 
 static void signal_cb(evutil_socket_t sig, short events, void *user_data)
 {
-    struct event_base *base = user_data;
-    struct timeval delay = { 1, 0 };
+	struct event_base *base = user_data;
+	struct timeval delay = { 1, 0 };
 
     printf("signal\n");
-    printf("Caught an interrupt signal; exiting cleanly in 1 second.\n");
+	printf("Caught an interrupt signal; exiting cleanly in 1 second.\n");
 
-    event_base_loopexit(base, &delay);
+	event_base_loopexit(base, &delay);
 }
 
 int get_active_address(char *interface, char *buf, int len)
@@ -1189,12 +1190,12 @@ int get_active_address(char *interface, char *buf, int len)
 
 int main(int argc, char **argv)
 {
-    struct event_base *base;
-    struct evconnlistener *listener;
-    struct event *signal_event;
+	struct event_base *base;
+	struct evconnlistener *listener;
+	struct event *signal_event;
     char url[1024];
 
-    struct sockaddr_in sin;
+	struct sockaddr_in sin;
 
     INIT_LIST_HEAD(&session_list);
     init_uri_list();
@@ -1210,35 +1211,35 @@ int main(int argc, char **argv)
     alloc_uri(url);
     /////////////////////////////////////////////////////
 
-    base = event_base_new();
-    if (!base) {
-        fprintf(stderr, "Could not initialize libevent!\n");
-        return 1;
-    }
+	base = event_base_new();
+	if (!base) {
+		fprintf(stderr, "Could not initialize libevent!\n");
+		return 1;
+	}
 
-    memset(&sin, 0, sizeof(sin));
-    sin.sin_family = AF_INET;
+	memset(&sin, 0, sizeof(sin));
+	sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = inet_addr(active_addr);
-    sin.sin_port = htons(PORT);
+	sin.sin_port = htons(PORT);
 
-    listener = evconnlistener_new_bind(base, listener_cb, (void *)base,
+	listener = evconnlistener_new_bind(base, listener_cb, (void *)base,
             LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1, (struct sockaddr*)&sin, sizeof(sin));
-    if (!listener) {
-        fprintf(stderr, "Could not create a listener!\n");
-        return 1;
-    }
+	if (!listener) {
+		fprintf(stderr, "Could not create a listener!\n");
+		return 1;
+	}
 
-    signal_event = evsignal_new(base, SIGINT, signal_cb, (void *)base);
-    if (!signal_event || event_add(signal_event, NULL)<0) {
-        fprintf(stderr, "Could not create/add a signal event!\n");
-        return 1;
-    }
+	signal_event = evsignal_new(base, SIGINT, signal_cb, (void *)base);
+	if (!signal_event || event_add(signal_event, NULL)<0) {
+		fprintf(stderr, "Could not create/add a signal event!\n");
+		return 1;
+	}
 
-    event_base_dispatch(base);
+	event_base_dispatch(base);
 
-    evconnlistener_free(listener);
-    event_free(signal_event);
-    event_base_free(base);
+	evconnlistener_free(listener);
+	event_free(signal_event);
+	event_base_free(base);
 
-    return 0;
+	return 0;
 }

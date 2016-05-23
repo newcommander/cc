@@ -1,6 +1,7 @@
 #ifndef URI_H
 #define URI_H
 
+#include <stdint.h>
 #include <pthread.h>
 
 #include "list.h"
@@ -14,6 +15,7 @@ typedef struct {
 #define URI_BUSY 1
 #define URI_IN_FREE 2
     int status;
+    uint32_t ssrc;
 } Uri;
 
 void init_uri_list();
