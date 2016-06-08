@@ -124,7 +124,7 @@ Uri* alloc_uri(char *url)
 int free_uri(Uri *uri, int force)
 {
     if (!uri)
-        return;
+        return -1;
 
     pthread_mutex_lock(&uri->ref_mutex);
     if (uri->status == URI_IDLE)

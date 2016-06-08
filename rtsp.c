@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <time.h>
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
@@ -61,14 +60,6 @@ status_code response_code[] = {
     { "551", "Option not supported" },
     { NULL, NULL }
 };
-
-#define msleep(x) \
-    do { \
-        struct timespec time_to_wait; \
-        time_to_wait.tv_sec = 0; \
-        time_to_wait.tv_nsec = 1000 * 1000 * x; \
-        nanosleep(&time_to_wait, NULL); \
-    } while(0)
 
 static const char MESSAGE[] = "Hello, World!\n";
 static char active_addr[16];
@@ -390,7 +381,7 @@ static rtsp_session* create_rtsp_session(rtsp_request *rr, int c_rtp_port, int c
         break;
     }
     gettimeofday(&tv, NULL);
-    snprintf(rs->session_id, 9, "%04x%04x", tv.tv_usec, rand());
+    snprintf(rs->session_id, 9, "%04x%04x", (unsigned int)tv.tv_usec, (unsigned int)rand());
     rs->status = SESION_READY;
 
     pthread_mutex_lock(&session_mutex);
@@ -645,7 +636,6 @@ failed:
     return 500;
 }
 
-extern void* rtp_dispatch(void *arg);
 extern void* rtcp_dispatch(void *arg);
 static int make_response_for_play(rtsp_request *rr, char **response)
 {
@@ -658,10 +648,6 @@ static int make_response_for_play(rtsp_request *rr, char **response)
         return 454;
 
     // play
-    if (pthread_create(&rs->rtp_thread, NULL, rtp_dispatch, rs) != 0) {
-        printf("%s: creating rtp thread failed: %s\n", __func__, strerror(errno));
-        return 500;
-    }
     if (pthread_create(&rs->rtcp_thread, NULL, rtcp_dispatch, rs) != 0) {
         printf("%s: creating rtcp thread failed: %s\n", __func__, strerror(errno));
         pthread_cancel(rs->rtp_thread); // TODO: is this call right ? please check...
@@ -1018,17 +1004,17 @@ void error_reply(int code, int cseq, char **response)
 
     make_status_line(&status_line, code_buf, NULL);
     if (!status_line) {
-        printf("%s: error");
+        printf("%s: error", __func__);
         goto out;
     }
     make_response_cseq(&cseq_str, cseq);
     if (!cseq_str) {
-        printf("%s: error");
+        printf("%s: error", __func__);
         goto out;
     }
     make_response_date(&date_str);
     if (!cseq_str) {
-        printf("%s: error");
+        printf("%s: error", __func__);
         goto out;
     }
     *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + 13, 1);

@@ -9,6 +9,7 @@
 #include <event2/event.h>
 #include <uv.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "list.h"
 #include "uri.h"
@@ -26,6 +27,14 @@
 #define MTH_TEARDOWN        11
 
 #define RTSP_VERSION "RTSP/1.0"
+
+#define msleep(x) \
+    do { \
+        struct timespec time_to_wait; \
+        time_to_wait.tv_sec = x / 1000; \
+        time_to_wait.tv_nsec = 1000 * 1000 * (x - time_to_wait.tv_sec * 1000); \
+        nanosleep(&time_to_wait, NULL); \
+    } while(0)
 
 typedef struct {
     char *code;
@@ -69,6 +78,11 @@ typedef struct {
     struct sockaddr_in serv_rtcp_addr;
     struct sockaddr_in clit_rtcp_addr;
     struct bufferevent *bev;
+    uint32_t timestamp_offset;
+    uint32_t samping_rate;
+    uint32_t packet_count;
+    uint32_t octet_count;
+    int rtcp_interval;  // ms
 } rtsp_session;
 
 #endif

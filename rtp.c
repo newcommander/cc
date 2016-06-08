@@ -3,6 +3,7 @@
 #include <string.h>
 #include <uv.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #include "rtsp.h"
 
@@ -73,6 +74,24 @@ static void set_seq_num(struct rtp_header *header, uint16_t seq_num)
     header->fix_head = (header->fix_head & ~RTP_SEQNUMB_MASK) | (uint32_t)seq_num;
 }
 
+static uint64_t timeval_to_ntp(const struct timeval *tv)
+{
+    uint64_t msw, lsw;
+    msw = tv->tv_sec + 0x83AA7E80; // 0x83AA7E80 is the number of seconds from 1900 to 1970
+    // lsw is a number in unit of 232 picosecond, 1s ~= 2^32 * 232ps
+    lsw = (uint32_t)((double)tv->tv_usec * 1.0e-6 * (((uint64_t)1) << 32));
+    return msw << 32 | lsw;
+}
+
+extern uint32_t timeval_to_rtp_timestamp(struct timeval *tv, rtsp_session *rs);
+static void set_timestamp(struct rtp_header *header, rtsp_session *rs)
+{
+    struct timeval tv;
+
+    gettimeofday(&tv, NULL);
+    header->timestamp = timeval_to_rtp_timestamp(&tv, rs);
+}
+
 static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     buf->base = calloc(suggested_size, 1);
@@ -127,7 +146,7 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
 	if ((header.fix_head & RTP_EXTSION_MASK) >> 28) ; // TODO
 
     if (((header.fix_head & RTP_CSRCCNT_MASK) >> 24) != 0) {
-        printf("%s: not support multiple synchronization source\n");
+        printf("%s: not support multiple synchronization source\n", __func__);
         // TODO: destroy rtp session ???
         return;
     }
@@ -140,7 +159,7 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
 
 static void* send_dispatch(void *arg)
 {
-    Uri *uri = (Uri*)arg;
+    rtsp_session *rs = (rtsp_session*)arg;
     struct rtp_header header;
     uint16_t seq_num = 0;
 
@@ -152,8 +171,8 @@ static void* send_dispatch(void *arg)
     clear_marker(&header);
     set_payload_type(&header, 85);
     set_seq_num(&header, seq_num);
-//    set_timestamp(&header);
-    header.ssrc = uri->ssrc;
+    set_timestamp(&header, rs);
+    header.ssrc = rs->uri->ssrc;
 
     while (1) {
         ;
@@ -168,6 +187,7 @@ void* rtp_dispatch(void *arg)
     int ret;
 
 	printf("rtp: %s\n", rs->session_id);
+    return NULL;
 
     ret = uv_udp_recv_start(&rs->rtp_handle, alloc_cb, recv_cb);
     if (ret != 0) {
@@ -176,7 +196,7 @@ void* rtp_dispatch(void *arg)
     }
 
     pthread_t send_thread;
-    if (pthread_create(&send_thread, NULL, send_dispatch, rs->uri) != 0) {
+    if (pthread_create(&send_thread, NULL, send_dispatch, rs) != 0) {
         printf("%s: creating rtp send thread failed: %s\n", __func__, strerror(errno));
         return NULL;
     }
