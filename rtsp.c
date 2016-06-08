@@ -299,7 +299,7 @@ static rtsp_session* create_rtsp_session(rtsp_request *rr, int c_rtp_port, int c
     struct timeval tv;
     struct sockaddr clit_addr;
     struct sockaddr_in *clit_addr_in;
-    socklen_t addr_len;
+    socklen_t addr_len = sizeof(struct sockaddr);
     rtsp_session *rs = NULL;
     Uri *uri = NULL;
     int port, ret;

@@ -17,7 +17,8 @@
 struct sr_rtcp_pkt {
     uint32_t header;
     uint32_t ssrc;
-    uint64_t ntp_timestamp;
+    uint32_t ntp_timestamp_msw;
+    uint32_t ntp_timestamp_lsw;
     uint32_t rtp_timestamp;
     uint32_t packet_count;
     uint32_t octet_count;
@@ -57,20 +58,34 @@ static void set_pkt_length(struct sr_rtcp_pkt *pkt, uint32_t length)
     pkt->header = (pkt->header & ~RTCP_LENGTH_MASK) | length;
 }
 
-static uint64_t timeval_to_ntp(const struct timeval *tv)
+static void set_pkt_header(struct sr_rtcp_pkt *pkt)
 {
-    uint64_t msw, lsw;
+    set_version(pkt);
+    clear_padding(pkt);
+    set_report_count(pkt, 0);
+    set_pkt_type(pkt, 200);
+    set_pkt_length(pkt, 6);
+    pkt->header = htonl(pkt->header);
+}
+
+static uint64_t timeval_to_ntp(const struct timeval *tv, struct sr_rtcp_pkt *pkt)
+{
+//    uint64_t ret;
+    uint32_t msw, lsw;
     msw = tv->tv_sec + 0x83AA7E80; // 0x83AA7E80 is the number of seconds from 1900 to 1970
     // lsw is a number in unit of 232 picosecond, 1s ~= 2^32 * 232ps
     lsw = (uint32_t)((double)tv->tv_usec * 1.0e-6 * (((uint64_t)1) << 32));
-    return msw << 32 | lsw;
+    return htonl(((uint64_t)msw) << 32) | htonl(lsw);
 }
 
 static void set_ntp_timestamp(struct sr_rtcp_pkt *pkt, struct timeval *tv)
 {
     if (!pkt || !tv)
         return;
-    pkt->ntp_timestamp = timeval_to_ntp(tv);
+    uint32_t msw, lsw;
+    pkt->ntp_timestamp_msw = htonl(tv->tv_sec + 0x83AA7E80); // 0x83AA7E80 is the number of seconds from 1900 to 1970
+    // lsw is a number in unit of 232 picosecond, 1s ~= 2^32 * 232ps
+    pkt->ntp_timestamp_lsw = htonl((uint32_t)((double)tv->tv_usec * 1.0e-6 * (((uint64_t)1) << 32)));
 }
 
 uint32_t timeval_to_rtp_timestamp(struct timeval *tv, rtsp_session *rs)
@@ -87,7 +102,7 @@ static void set_rtp_timestamp(struct sr_rtcp_pkt *pkt, struct timeval *tv, rtsp_
 {
     if (!pkt)
         return;
-    pkt->rtp_timestamp = timeval_to_rtp_timestamp(tv, rs);
+    pkt->rtp_timestamp = htonl(timeval_to_rtp_timestamp(tv, rs));
 }
 
 static void set_source_count(void *pkt, uint32_t count)
@@ -102,8 +117,10 @@ static void add_src_desc(struct sr_rtcp_pkt *pkt, rtsp_session *rs)
     set_report_count(pkt, 1);
     set_pkt_type(pkt, 202);
     set_pkt_length(pkt, 3);
-    pkt->ssrc = rs->uri->ssrc;
-    pkt->ntp_timestamp = (uint64_t)0x0102646400000000;
+    pkt->header = htonl(pkt->header);
+    pkt->ssrc = htonl(rs->uri->ssrc);
+    pkt->ntp_timestamp_msw = htonl(0x01026464);
+    pkt->ntp_timestamp_lsw = htonl(0x00000000);
 }
 
 static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
@@ -144,29 +161,24 @@ void* send_dispatch(void *arg)
     rs->samping_rate = 90000;
     rs->rtcp_interval = 1500;
 
-    set_version(&pkt);
-    clear_padding(&pkt);
-    set_report_count(&pkt, 0);
-    set_pkt_type(&pkt, 200);
-    set_pkt_length(&pkt, (uint32_t)0xa5a5a5a5a5);
-    set_pkt_length(&pkt, 6);
-    pkt.ssrc = rs->uri->ssrc;
+    set_pkt_header(&pkt);
+    pkt.ssrc = htonl(rs->uri->ssrc);
 
     while (1) {
-        { // TODO: need a lock ?
-        pkt.packet_count = rs->packet_count;
-        pkt.octet_count = rs->octet_count;
-        }
         gettimeofday(&tv, NULL);
         set_ntp_timestamp(&pkt, &tv);
         set_rtp_timestamp(&pkt, &tv, rs);
+        { // TODO: need a lock ?
+        pkt.packet_count = htonl(rs->packet_count);
+        pkt.octet_count = htonl(rs->octet_count);
+        }
         add_src_desc((struct sr_rtcp_pkt*)pkt.extension, rs);
         uv_buf.base = (char*)&pkt;
-        uv_buf.len = 44;
+        uv_buf.len = 44; // TODO: how to compute length ?
 
         int ret;
-        ret = uv_udp_send(&req, &rs->rtcp_handle, &uv_buf, 1, (struct sockaddr*)&rs->clit_rtcp_addr, send_cb);
-        if (ret < 0) {
+        ret = uv_udp_send(&req, &rs->rtcp_handle, &uv_buf, 1, (const struct sockaddr*)&rs->clit_rtcp_addr, send_cb);
+        if (ret != 0) {
             printf("send failed: %s\n", uv_strerror(ret));
         }
 
