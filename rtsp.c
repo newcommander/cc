@@ -1006,12 +1006,14 @@ static int convert_rtsp_request(rtsp_request **rr, struct bufferevent *bev, char
     ret = get_request_line(*rr, buf, len);
     if (ret != 0) {
         release_rtsp_request(*rr);
+        *rr = NULL;
         return ret;
     }
 
     ret = get_rtsp_request_header(*rr, buf, len);
     if (ret != 0) {
         release_rtsp_request(*rr);
+        *rr = NULL;
         return ret;
     }
 

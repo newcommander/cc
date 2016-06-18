@@ -27,7 +27,5 @@ void release_uri(Uri *uri);
 void alloc_uri(char *url, frame_opreation frame_opt);
 void add_uris(char *base_url);
 void del_uris();
-// return 0: success, -1: failed
-//int free_uri(Uri *uri, int force);
 
 #endif

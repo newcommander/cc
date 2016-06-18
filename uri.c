@@ -118,7 +118,6 @@ void alloc_uri(char *url, frame_opreation frame_opt)
     pthread_mutex_lock(&uri_mutex);
     list_add_tail(&uri->list, &uri_list);
     pthread_mutex_unlock(&uri_mutex);
-    printf("%s\n", uri->url);
 }
 
 // return 0: success, -1: failed

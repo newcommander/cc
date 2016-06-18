@@ -14,11 +14,10 @@ static int samping_frame(rtsp_session *rs, unsigned char *data, int *len)
     }
 
     av_init_packet(&pkt);
-    pkt.data = NULL;    // packet data will be allocated by the encoder
+    pkt.data = NULL;
     pkt.size = 0;
 
     rs->uri->frame_opt(rs);
-    //lala(rs);
 
     /* encode the image */
     ret = avcodec_encode_video2(rs->cc, &pkt, rs->frame, &got_output);
@@ -179,37 +178,5 @@ void video_encode(rtsp_session *rs, unsigned char *data, int *len)
     ret = samping_frame(rs, data, len);
     if (ret < 0)
         return;
-
-    /* get the delayed frames */
-    /*
-    for (got_output = 1; got_output; i++) {
-        fflush(stdout);
-
-        ret = avcodec_encode_video2(c, &pkt, NULL, &got_output);
-        if (ret < 0) {
-            fprintf(stderr, "Error encoding frame\n");
-            exit(1);
-        }
-
-        if (got_output) {
-            unsigned char *p = (unsigned char*)calloc(pkt.size, 1);
-            memcpy(p, pkt.data, pkt.size);
-            data[pkt_num] = p;
-            len[pkt_num] = pkt.size;
-            pkt_num++;
-            av_packet_unref(&pkt);
-        }
-    }
-    */
 }
 
-/*
-int main(int argc, char **argv)
-{
-    avcodec_register_all();
-
-    video_encode();
-
-    return 0;
-}
-*/
