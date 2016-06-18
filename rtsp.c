@@ -439,7 +439,7 @@ static void release_rtsp_session(rtsp_session *rs)
     output = bufferevent_get_output(rs->bev);
     while (evbuffer_get_length(output)) {
         msleep(100);
-        if (count > 10)
+        if (count++ > 10)
             break;
     }
 
@@ -798,7 +798,7 @@ static int make_response(rtsp_request *rr, char **buf)
 
 static int get_request_line(rtsp_request *rr, char *buf, int len)
 {
-    char *p_head = NULL, *p_tail = NULL, *tmp = NULL;
+    char *p_head = NULL, *p_tail = NULL, *tmp = NULL, request_url[1024];
 
     if (!rr || !buf) {
         printf("Invalid parameter\n");
@@ -852,12 +852,22 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
         if (*tmp == ':')
             break;
     }
-    rr->url = (char*)calloc(tmp - p_head + 1, 1);
+    memset(request_url, 0, 1024);
+    memcpy(request_url, p_head, tmp - p_head);
+    if (*tmp == ':') {
+        for (; tmp <= p_tail; tmp++) {
+            if (*tmp == '/') {
+                strncat(request_url, tmp, p_tail - tmp);
+                break;
+            }
+        }
+    }
+    rr->url = (char*)calloc(strlen(request_url) + 1, 1);
     if (!rr->url) {
         printf("%s: calloc for url failed\n", __func__);
         return 500;
     }
-    strncpy(rr->url, p_head, tmp - p_head);
+    strncpy(rr->url, request_url, strlen(request_url));
 
     for (p_head = ++p_tail; *p_tail != '\r' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != '\r') {
@@ -1198,7 +1208,7 @@ int main(int argc, char **argv)
     struct event_base *base;
     struct evconnlistener *listener;
     struct event *signal_event;
-    char url[1024];
+    char base_url[1024];
 
     struct sockaddr_in sin;
 
@@ -1209,12 +1219,10 @@ int main(int argc, char **argv)
     if (get_active_address(NULL, active_addr, sizeof(active_addr)) != 0)
         return 1;
 
-    /////////////////////////////////////////////////////
-    memset(url, 0, 1024);
-    strncat(url, "rtsp://", 7);
-    strncat(url, active_addr, strlen(active_addr));
-    alloc_uris(url);
-    /////////////////////////////////////////////////////
+    memset(base_url, 0, 1024);
+    strncat(base_url, "rtsp://", 7);
+    strncat(base_url, active_addr, strlen(active_addr));
+    add_uris(base_url);
 
     base = event_base_new();
     if (!base) {
@@ -1242,7 +1250,7 @@ int main(int argc, char **argv)
 
     event_base_dispatch(base);
 
-    free_uris();
+    del_uris();
 
     evconnlistener_free(listener);
     event_free(signal_event);

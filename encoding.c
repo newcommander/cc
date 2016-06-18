@@ -3,31 +3,6 @@
 #include <math.h>
 #include "rtsp.h"
 
-void lala(rtsp_session *rs)
-{
-    int height, width, x, y;
-    AVFrame *frame;
-
-    frame = rs->frame;
-    height = rs->cc->height;
-    width = rs->cc->width;
-
-    /* Y */
-    for (y = 0; y < height; y++) {
-        for (x = 0; x < width; x++) {
-            frame->data[0][y * frame->linesize[0] + x] = x + y + rs->pts * 3;
-        }
-    }
-    /* Cb and Cr */
-    for (y = 0; y < height/2; y++) {
-        for (x = 0; x < width/2; x++) {
-            frame->data[1][y * frame->linesize[1] + x] = 128 + y + rs->pts * 2;
-            frame->data[2][y * frame->linesize[2] + x] = 64 + x + rs->pts * 5;
-        }
-    }
-    frame->pts = rs->pts++;
-}
-
 static int samping_frame(rtsp_session *rs, unsigned char *data, int *len)
 {
     int ret = 0, got_output = 0;
@@ -42,7 +17,8 @@ static int samping_frame(rtsp_session *rs, unsigned char *data, int *len)
     pkt.data = NULL;    // packet data will be allocated by the encoder
     pkt.size = 0;
 
-    lala(rs);
+    rs->uri->frame_opt(rs);
+    //lala(rs);
 
     /* encode the image */
     ret = avcodec_encode_video2(rs->cc, &pkt, rs->frame, &got_output);

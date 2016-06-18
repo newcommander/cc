@@ -89,18 +89,18 @@ void release_uri(Uri *uri)
         unref_uri(uri);
 }
 
-Uri* alloc_uri(char *url)
+void alloc_uri(char *url, frame_opreation frame_opt)
 {
     Uri *uri = NULL;
     if (!url) {
         printf("%s: Invalid parameter\n", __func__);
-        return NULL;
+        return;
     }
 
     uri = (Uri*)calloc(1, sizeof(Uri));
     if (!uri) {
         printf("%s: calloc failed for uri\n", __func__);
-        return NULL;
+        return;
     }
     pthread_mutex_init(&uri->ref_mutex, NULL);
     uri->status = URI_IDLE;
@@ -109,15 +109,16 @@ Uri* alloc_uri(char *url)
     if (!uri->url) {
         printf("%s: calloc failed for url of uri\n", __func__);
         free(uri);
-        return NULL;
+        return;
     }
     strncpy(uri->url, url, strlen(url));
     uri->ssrc = rand();
+    uri->frame_opt = frame_opt;
 
     pthread_mutex_lock(&uri_mutex);
     list_add_tail(&uri->list, &uri_list);
     pthread_mutex_unlock(&uri_mutex);
-    return uri;
+    printf("%s\n", uri->url);
 }
 
 // return 0: success, -1: failed
@@ -148,7 +149,9 @@ static int free_uri(Uri *uri, int force)
     return 0;
 }
 
-void free_uris()
+void del_uris()
 {
-    ; // FIXME
+    Uri *uri = NULL;
+    list_for_each_entry(uri, &uri_list, list)
+        free_uri(uri, 0);
 }

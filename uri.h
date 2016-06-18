@@ -6,6 +6,8 @@
 
 #include "list.h"
 
+typedef void (*frame_opreation)(void *arg);
+
 typedef struct {
     struct list_head list;
     pthread_mutex_t ref_mutex;
@@ -16,15 +18,16 @@ typedef struct {
 #define URI_IN_FREE 2
     int status;
     uint32_t ssrc;
-    void (*frame_edit)(void *arg);
+    frame_opreation frame_opt;
 } Uri;
 
 void init_uri_list();
 Uri* get_uri(char *url);
 void release_uri(Uri *uri);
-Uri* alloc_uris(char *url);
+void alloc_uri(char *url, frame_opreation frame_opt);
+void add_uris(char *base_url);
+void del_uris();
 // return 0: success, -1: failed
 //int free_uri(Uri *uri, int force);
-void free_uris();
 
 #endif

@@ -15,7 +15,7 @@ CFLAGS=-g -Wall
 LFLAGS=-lavcodec -lswresample -lavutil -lpthread \
 	   -lz -lrt -lm -levent_core -luv
 
-OBJ=uri.o rtsp.o rtcp.o rtp.o encoding.o 
+OBJ=uri.o rtsp.o rtcp.o rtp.o encoding.o frame_opreation.o
 
 TARGET=main
 
