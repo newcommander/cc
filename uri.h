@@ -16,13 +16,15 @@ typedef struct {
 #define URI_IN_FREE 2
     int status;
     uint32_t ssrc;
+    void (*frame_edit)(void *arg);
 } Uri;
 
 void init_uri_list();
 Uri* get_uri(char *url);
 void release_uri(Uri *uri);
-Uri* alloc_uri(char *url);
+Uri* alloc_uris(char *url);
 // return 0: success, -1: failed
-int free_uri(Uri *uri, int force);
+//int free_uri(Uri *uri, int force);
+void free_uris();
 
 #endif

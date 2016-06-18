@@ -1,20 +1,32 @@
-CC=gcc
-
+LIBEVENT=/usr/local/libevent
 FFMPEG=/usr/local/ffmpeg
+LIBUV=/usr/local/libuv
 
-INCLUDE = -I$(FFMPEG)/include
-LINK = -L$(FFMPEG)/lib
+INCLUDE=-I$(LIBEVENT)/include \
+		-I$(FFMPEG)/include \
+		-I$(LIBUV)/include
+
+LINK=-L$(LIBEVENT)/lib \
+	 -L$(FFMPEG)/lib \
+	 -L$(LIBUV)/lib
+
+CC=gcc
+CFLAGS=-g -Wall
+LFLAGS=-lavcodec -lswresample -lavutil -lpthread \
+	   -lz -lrt -lm -levent_core -luv
+
+OBJ=uri.o rtsp.o rtcp.o rtp.o encoding.o 
 
 TARGET=main
 
-CFLAGS=-g
-LFLAGS=-lavcodec -lswresample -lavutil \
-	   -lz -lrt -lm
-
 .PHONY: all clean
 
-all:
-	$(CC) $(INCLUDE) $(LINK) encoding.c $(CFLAGS) $(LFLAGS) -o $(TARGET)
+%.o: %.c
+	$(CC) $(INCLUDE) $(CFLAGS) -c $< -o $@
+
+all: $(OBJ)
+	$(CC) $(LINK) $(OBJ) $(LFLAGS) -o $(TARGET)
+	rm -f *.o
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) *.o

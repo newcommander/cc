@@ -121,7 +121,7 @@ Uri* alloc_uri(char *url)
 }
 
 // return 0: success, -1: failed
-int free_uri(Uri *uri, int force)
+static int free_uri(Uri *uri, int force)
 {
     if (!uri)
         return -1;
@@ -146,4 +146,9 @@ int free_uri(Uri *uri, int force)
     free(uri->url);
     free(uri);
     return 0;
+}
+
+void free_uris()
+{
+    ; // FIXME
 }

@@ -1,168 +1,211 @@
-/*
- * Copyright (c) 2001 Fabrice Bellard
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-/**
- * @file
- * libavcodec API use example.
- *
- * @example decoding_encoding.c
- * Note that libavcodec only handles codecs (mpeg, mpeg4, etc...),
- * not file formats (avi, vob, mp4, mov, mkv, mxf, flv, mpegts, mpegps, etc...). See library 'libavformat' for the
- * format handling
- */
-
+#include <string.h>
+#include <stdlib.h>
 #include <math.h>
+#include "rtsp.h"
 
-#include <libavutil/opt.h>
-#include <libavcodec/avcodec.h>
-#include <libavutil/channel_layout.h>
-#include <libavutil/common.h>
-#include <libavutil/imgutils.h>
-#include <libavutil/mathematics.h>
-#include <libavutil/samplefmt.h>
-
-
-/*
- * Video encoding example
- */
-static void video_encode()
+void lala(rtsp_session *rs)
 {
-    AVCodec *codec;
-    AVCodecContext *c= NULL;
-    int i, ret, x, y, got_output;
-    FILE *f;
+    int height, width, x, y;
     AVFrame *frame;
+
+    frame = rs->frame;
+    height = rs->cc->height;
+    width = rs->cc->width;
+
+    /* Y */
+    for (y = 0; y < height; y++) {
+        for (x = 0; x < width; x++) {
+            frame->data[0][y * frame->linesize[0] + x] = x + y + rs->pts * 3;
+        }
+    }
+    /* Cb and Cr */
+    for (y = 0; y < height/2; y++) {
+        for (x = 0; x < width/2; x++) {
+            frame->data[1][y * frame->linesize[1] + x] = 128 + y + rs->pts * 2;
+            frame->data[2][y * frame->linesize[2] + x] = 64 + x + rs->pts * 5;
+        }
+    }
+    frame->pts = rs->pts++;
+}
+
+static int samping_frame(rtsp_session *rs, unsigned char *data, int *len)
+{
+    int ret = 0, got_output = 0;
     AVPacket pkt;
-    uint8_t endcode[] = { 0, 0, 1, 0xb7 };
 
-    char *filename = "video.mpg";
-    //int codec_id = AV_CODEC_ID_H264;
-    int codec_id = AV_CODEC_ID_MPEG1VIDEO;
-
-    printf("Encode video file %s\n", filename);
-
-    /* find the mpeg1 video encoder */
-    codec = avcodec_find_encoder(codec_id);
-    if (!codec) {
-        fprintf(stderr, "Codec not found\n");
-        exit(1);
+    if (!rs || !rs->cc || !rs->frame) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
     }
 
-    c = avcodec_alloc_context3(codec);
-    if (!c) {
-        fprintf(stderr, "Could not allocate video codec context\n");
-        exit(1);
+    av_init_packet(&pkt);
+    pkt.data = NULL;    // packet data will be allocated by the encoder
+    pkt.size = 0;
+
+    lala(rs);
+
+    /* encode the image */
+    ret = avcodec_encode_video2(rs->cc, &pkt, rs->frame, &got_output);
+    if (ret < 0) {
+        printf("%s: Error encoding frame [first]\n", __func__);
+        return -1;
+    }
+    if (!got_output) {
+        ret = avcodec_encode_video2(rs->cc, &pkt, NULL, &got_output);
+        if (ret < 0) {
+            printf("%s: Error encoding frame [second]\n", __func__);
+            return -1;
+        }
+    }
+
+    if (got_output) {
+        if (pkt.size > PACKET_BUFFER_SIZE) {
+            printf("%s: Too large packet, drop it\n", __func__);
+            return -1;
+        }
+        memcpy(data, pkt.data, pkt.size);
+        *len = pkt.size;
+        av_packet_unref(&pkt);
+    } else {
+        printf("%s: Not got packet\n", __func__);
+        return -1;
+    }
+    return 0;
+}
+
+int encoding_init(rtsp_session *rs)
+{
+    AVCodec *codec;
+    int codec_id = AV_CODEC_ID_MPEG4;
+    int ret = 0;
+
+    if (!rs) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+
+    avcodec_register_all();
+
+    codec = avcodec_find_encoder(codec_id);
+    if (!codec) {
+        printf("%s: Codec not found\n", __func__);
+        goto failed;
+    }
+
+    if (!rs->cc) {
+        rs->cc = avcodec_alloc_context3(codec);
+        if (!rs->cc) {
+            printf("%s: Could not allocate video codec context\n", __func__);
+            goto failed;
+        }
     }
 
     /* put sample parameters */
-    c->bit_rate = 400000;
+    rs->cc->bit_rate = 400000;
     /* resolution must be a multiple of two */
-    c->width = 352;
-    c->height = 288;
+    rs->cc->width = 469;
+    rs->cc->height = 288;
     /* frames per second */
-    c->time_base = (AVRational){1,25};
+    rs->cc->time_base = (AVRational){1,25};
     /* emit one intra frame every ten frames
      * check frame pict_type before passing frame
      * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
      * then gop_size is ignored and the output of encoder
      * will always be I frame irrespective to gop_size
      */
-    c->gop_size = 10;
-    c->max_b_frames = 1;
-    c->pix_fmt = AV_PIX_FMT_YUV420P;
+    rs->cc->gop_size = 10;
+    rs->cc->max_b_frames = 1;
+    rs->cc->pix_fmt = AV_PIX_FMT_YUV420P;
 
     if (codec_id == AV_CODEC_ID_H264)
-        av_opt_set(c->priv_data, "preset", "slow", 0);
+        av_opt_set(rs->cc->priv_data, "preset", "slow", 0);
 
     /* open it */
-    if (avcodec_open2(c, codec, NULL) < 0) {
-        fprintf(stderr, "Could not open codec\n");
-        exit(1);
-    }
-
-    f = fopen(filename, "wb");
-    if (!f) {
-        fprintf(stderr, "Could not open %s\n", filename);
-        exit(1);
-    }
-
-    frame = av_frame_alloc();
-    if (!frame) {
-        fprintf(stderr, "Could not allocate video frame\n");
-        exit(1);
-    }
-    frame->format = c->pix_fmt;
-    frame->width  = c->width;
-    frame->height = c->height;
-
-    /* the image can be allocated by any means and av_image_alloc() is
-     * just the most convenient way if av_malloc() is to be used */
-    ret = av_image_alloc(frame->data, frame->linesize, c->width, c->height,
-                         c->pix_fmt, 32);
-    if (ret < 0) {
-        fprintf(stderr, "Could not allocate raw picture buffer\n");
-        exit(1);
-    }
-
-    /* encode 1 second of video */
-    for (i = 0; i < 25; i++) {
-        av_init_packet(&pkt);
-        pkt.data = NULL;    // packet data will be allocated by the encoder
-        pkt.size = 0;
-
-        fflush(stdout);
-        /* prepare a dummy image */
-        /* Y */
-        for (y = 0; y < c->height; y++) {
-            for (x = 0; x < c->width; x++) {
-                frame->data[0][y * frame->linesize[0] + x] = x + y + i * 3;
-            }
+    if (!avcodec_is_open(rs->cc)) {
+        if (avcodec_open2(rs->cc, codec, NULL) < 0) {
+            printf("%s: Could not open codec\n", __func__);
+            goto failed;
         }
+    }
 
-        /* Cb and Cr */
-        for (y = 0; y < c->height/2; y++) {
-            for (x = 0; x < c->width/2; x++) {
-                frame->data[1][y * frame->linesize[1] + x] = 128 + y + i * 2;
-                frame->data[2][y * frame->linesize[2] + x] = 64 + x + i * 5;
-            }
+    if (!rs->frame) {
+        rs->frame = av_frame_alloc();
+        if (!rs->frame) {
+            printf("%s: Could not allocate video frame\n", __func__);
+            goto failed;
         }
+    }
+    rs->frame->format = rs->cc->pix_fmt;
+    rs->frame->width  = rs->cc->width;
+    rs->frame->height = rs->cc->height;
 
-        frame->pts = i;
-
-        /* encode the image */
-        ret = avcodec_encode_video2(c, &pkt, frame, &got_output);
+    if (!rs->frame->data[0]) {
+        ret = av_image_alloc(rs->frame->data, rs->frame->linesize, rs->cc->width, rs->cc->height, rs->cc->pix_fmt, 32);
         if (ret < 0) {
-            fprintf(stderr, "Error encoding frame\n");
-            exit(1);
-        }
-
-        if (got_output) {
-            printf("Write frame %3d (size=%5d)\n", i, pkt.size);
-            fwrite(pkt.data, 1, pkt.size, f);
-            av_packet_unref(&pkt);
+            printf("%s: Could not allocate raw picture buffer\n", __func__);
+            goto failed;
         }
     }
+
+    return 0;
+
+failed:
+    if (avcodec_is_open(rs->cc))
+        avcodec_close(rs->cc);
+    if (rs->cc) {
+        av_free(rs->cc);
+        rs->cc = NULL;
+    }
+    if (rs->frame->data[0])
+        av_freep(&rs->frame->data[0]);
+    if (rs->frame) {
+        av_frame_free(&rs->frame);
+        rs->frame = NULL;
+    }
+    return -1;
+}
+
+void encoding_deinit(rtsp_session *rs)
+{
+    if (!rs) {
+        printf("%s: Invalid parameter\n", __func__);
+        return;
+    }
+    if (avcodec_is_open(rs->cc))
+        avcodec_close(rs->cc);
+    if (rs->cc) {
+        av_free(rs->cc);
+        rs->cc = NULL;
+    }
+    if (rs->frame->data[0])
+        av_freep(&rs->frame->data[0]);
+    if (rs->frame) {
+        av_frame_free(&rs->frame);
+        rs->frame = NULL;
+    }
+}
+
+void video_encode(rtsp_session *rs, unsigned char *data, int *len)
+{
+    int ret = 0;
+
+    if (!rs) {
+        printf("%s: Invalid parameter\n", __func__);
+        return;
+    }
+
+    if (!rs->cc || !rs->frame) {
+        ret = encoding_init(rs);
+        if (ret < 0)
+            return;
+    }
+
+    ret = samping_frame(rs, data, len);
+    if (ret < 0)
+        return;
 
     /* get the delayed frames */
+    /*
     for (got_output = 1; got_output; i++) {
         fflush(stdout);
 
@@ -173,23 +216,18 @@ static void video_encode()
         }
 
         if (got_output) {
-            printf("Write frame %3d (size=%5d)\n", i, pkt.size);
-            fwrite(pkt.data, 1, pkt.size, f);
+            unsigned char *p = (unsigned char*)calloc(pkt.size, 1);
+            memcpy(p, pkt.data, pkt.size);
+            data[pkt_num] = p;
+            len[pkt_num] = pkt.size;
+            pkt_num++;
             av_packet_unref(&pkt);
         }
     }
-
-    /* add sequence end code to have a real mpeg file */
-    fwrite(endcode, 1, sizeof(endcode), f);
-    fclose(f);
-
-    avcodec_close(c);
-    av_free(c);
-    av_freep(&frame->data[0]);
-    av_frame_free(&frame);
-    printf("\n");
+    */
 }
 
+/*
 int main(int argc, char **argv)
 {
     avcodec_register_all();
@@ -198,3 +236,4 @@ int main(int argc, char **argv)
 
     return 0;
 }
+*/

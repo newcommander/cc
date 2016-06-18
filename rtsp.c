@@ -82,6 +82,7 @@ void release_rtsp_request(rtsp_request *rr)
         free(rr->rh.transport);
     if (rr->rh.range)
         free(rr->rh.range);
+    free(rr);
 }
 
 static char* find_phrase_by_code(char *code)
@@ -260,7 +261,8 @@ static int make_sdp_string(char **buf)
     char *session_name = "s=live from cc\r\n";
     char *time = "t=0 0\r\n";
     char *media_desc = "m=video 0 RTP/AVP 96\r\nc=IN IP4 0.0.0.0\r\nb=AS:500\r\n";
-    char *media_attr = "a=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z2QAH6zZQEAEmhAAAAMAEAAAAwMo8YMZYA==,aOvjyyLA\r\n";    // how to set this attribute ???
+    //char *media_attr = "a=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z2QAH6zZQEAEmhAAAAMAEAAAAwMo8YMZYA==,aOvjyyLA\r\n";    // how to set this attribute ???
+    char *media_attr = "a=rtpmap:96 MP4V-ES/90000\r\na=fmtp:96 profile-level-id=64001F\r\n";    // how to set this attribute ???
     struct timeval tv;
 
     if (!buf) {
@@ -339,22 +341,28 @@ static rtsp_session* create_rtsp_session(rtsp_request *rr, int c_rtp_port, int c
     }
     rs->uri = uri;
     rs->bev = rr->bev;
+    rs->bev->wm_read.private_data = rs;
     uv_ip4_addr(clit_ip, c_rtp_port, &rs->clit_rtp_addr);
     uv_ip4_addr(clit_ip, c_rtcp_port, &rs->clit_rtcp_addr);
 
-    if (ret = uv_loop_init(&rs->rtp_loop)) {
+    ret = uv_loop_init(&rs->rtp_loop);
+    if (ret != 0) {
         printf("%s: init RTP UDP loop failed: %s\n", __func__, uv_strerror(ret));
         goto failed_rtp_loop_init;
     }
-    if (ret = uv_loop_init(&rs->rtcp_loop)) {
+    ret = uv_loop_init(&rs->rtcp_loop);
+    if (ret != 0) {
         printf("%s: init RTCP UDP loop failed: %s\n", __func__, uv_strerror(ret));
         goto failed_rtcp_loop_init;
     }
-    if (ret = uv_udp_init(&rs->rtp_loop, &rs->rtp_handle)) {
+
+    ret = uv_udp_init(&rs->rtp_loop, &rs->rtp_handle);
+    if (ret != 0) {
         printf("%s: init RTP UDP handle failed: %s\n", __func__, uv_strerror(ret));
         goto failed;
     }
-    if (ret = uv_udp_init(&rs->rtcp_loop, &rs->rtcp_handle)) {
+    ret = uv_udp_init(&rs->rtcp_loop, &rs->rtcp_handle);
+    if (ret != 0) {
         printf("%s: init RTCP UDP handle failed: %s\n", __func__, uv_strerror(ret));
         goto failed;
     }
@@ -434,15 +442,6 @@ static void release_rtsp_session(rtsp_session *rs)
         if (count > 10)
             break;
     }
-    bufferevent_free(rs->bev);
-
-    uv_udp_recv_stop(&rs->rtp_handle);
-    uv_udp_recv_stop(&rs->rtcp_handle);
-
-    if (uv_loop_alive(&rs->rtcp_loop))
-        uv_stop(&rs->rtcp_loop);
-    if (uv_loop_alive(&rs->rtp_loop))
-        uv_stop(&rs->rtp_loop);
 
     release_uri(rs->uri);
 
@@ -560,16 +559,18 @@ static int make_response_for_setup(rtsp_request *rr, char **response)
     p_tail = rr->rh.transport;
     while (p_tail < rr->rh.transport + len) {
         p_tail = strstr(p_head, ";");
+        p_tmp = strstr(p_head, "=");
         if (!p_tail)
             p_tail = rr->rh.transport + len;
         if (!strncmp(p_head, "RTP/AVP/UDP", p_tail - p_head))
             protocol = "RTP/AVP/UDP";
         else if (!strncmp(p_head, "unicast", p_tail - p_head))
             mode = "unicast";
-        else if (p_tmp = strstr(p_head, "=")) {
+        else if (p_tmp) {
             if (!strncmp(p_head, "client_port", p_tmp - p_head)) {
                 p_head = ++p_tmp;
-                if (p_tmp = strstr(p_head, "-")) {
+                p_tmp = strstr(p_head, "-");
+                if (p_tmp) {
                     char port[10];
                     memset(port, 0, 10);
                     memcpy(port, p_head, 10 < p_tmp - p_head ? 10 : p_tmp - p_head);
@@ -689,6 +690,22 @@ failed:
     return 500;
 }
 
+static void destroy_session(rtsp_session *rs)
+{
+    int ret;
+    void *res = NULL;
+    if (!rs)
+        return;
+    uv_udp_recv_stop(&rs->rtcp_handle);
+    uv_stop(&rs->rtcp_loop);
+
+    ret = pthread_join(rs->rtcp_thread, &res);
+    if (ret != 0)
+        printf("%s: pthread_join for rtcp_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+
+    release_rtsp_session(rs);
+}
+
 static int make_response_for_teardown(rtsp_request *rr, char **response)
 {
     rtsp_session *rs = NULL;
@@ -699,8 +716,7 @@ static int make_response_for_teardown(rtsp_request *rr, char **response)
     if (!rs)
         return 454;
 
-    // teardown
-    release_rtsp_session(rs);
+    destroy_session(rs);
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
@@ -727,6 +743,7 @@ static int make_response_for_teardown(rtsp_request *rr, char **response)
     free(cseq_str);
     free(date_str);
     return 0;
+
 failed:
     if (status_line)
         free(status_line);
@@ -837,7 +854,7 @@ static int get_request_line(rtsp_request *rr, char *buf, int len)
     }
     rr->url = (char*)calloc(tmp - p_head + 1, 1);
     if (!rr->url) {
-        printf("calloc for url failed\n");
+        printf("%s: calloc for url failed\n", __func__);
         return 500;
     }
     strncpy(rr->url, p_head, tmp - p_head);
@@ -1070,13 +1087,15 @@ static void read_cb(struct bufferevent *bev, void *user_data)
         response_str = NULL;
         error_reply(ret, rr->rh.cseq, &response_str);
     }
+    ret = rr->method;
     release_rtsp_request(rr);
 
 reply:
     bufferevent_write(bev, response_str, strlen(response_str));
-    //FIXME do free in write callback
     if (response_str)
         free(response_str);
+    if (ret == MTH_TEARDOWN) // FIXME: how to free bev after TEARDOWN cmd ?
+        bufferevent_free(bev);
     return;
 }
 
@@ -1085,8 +1104,6 @@ static void write_cb(struct bufferevent *bev, void *user_data)
     struct evbuffer *output = bufferevent_get_output(bev);
     if (evbuffer_get_length(output) == 0) {
         ;
-        //printf("flushed answer\n");
-        //bufferevent_free(bev);
     }
 }
 
@@ -1100,6 +1117,12 @@ static void event_cb(struct bufferevent *bev, short events, void *user_data)
     }
     /* None of the other events can happen here, since we haven't enabled
      * timeouts */
+
+    // TODO: have to release rtsp session ???
+    rtsp_session *rs = (rtsp_session*)bev->wm_read.private_data;
+    if (rs)
+        destroy_session(rs);
+
     bufferevent_free(bev);
 }
 
@@ -1118,8 +1141,6 @@ static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, str
     bufferevent_setcb(bev, read_cb, write_cb, event_cb, NULL);
     bufferevent_enable(bev, EV_WRITE);
     bufferevent_enable(bev, EV_READ);
-
-    //bufferevent_write(bev, MESSAGE, strlen(MESSAGE));
 }
 
 static void signal_cb(evutil_socket_t sig, short events, void *user_data)
@@ -1127,9 +1148,7 @@ static void signal_cb(evutil_socket_t sig, short events, void *user_data)
     struct event_base *base = user_data;
     struct timeval delay = { 1, 0 };
 
-    printf("signal\n");
     printf("Caught an interrupt signal; exiting cleanly in 1 second.\n");
-
     event_base_loopexit(base, &delay);
 }
 
@@ -1194,7 +1213,7 @@ int main(int argc, char **argv)
     memset(url, 0, 1024);
     strncat(url, "rtsp://", 7);
     strncat(url, active_addr, strlen(active_addr));
-    alloc_uri(url);
+    alloc_uris(url);
     /////////////////////////////////////////////////////
 
     base = event_base_new();
@@ -1222,6 +1241,8 @@ int main(int argc, char **argv)
     }
 
     event_base_dispatch(base);
+
+    free_uris();
 
     evconnlistener_free(listener);
     event_free(signal_event);
