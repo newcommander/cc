@@ -61,7 +61,6 @@ status_code response_code[] = {
     { NULL, NULL }
 };
 
-static const char MESSAGE[] = "Hello, World!\n";
 static char active_addr[16];
 static const int PORT = 554;
 
@@ -1069,8 +1068,8 @@ static void read_cb(struct bufferevent *bev, void *user_data)
 {
     struct evbuffer *input = bufferevent_get_input(bev);
     rtsp_request *rr = NULL;
-    char *response_str = NULL;
-    int ret = 0;
+    char *response_str = NULL, *p = NULL;
+    int ret = 0, offset = 0;
 
     size_t len = evbuffer_get_length(input);
     char *buf = (char*)calloc(len + 1, 1);
@@ -1080,13 +1079,12 @@ static void read_cb(struct bufferevent *bev, void *user_data)
         goto reply;
     }
 
-    char *p = buf;
-    int offset = 0;
+    p = buf;
+    offset = 0;
     while ((offset = bufferevent_read(bev, p, sizeof(buf))) > 0)
         p += offset;
 
     ret = convert_rtsp_request(&rr, bev, buf, len);
-    free(buf);
     if (!rr) {
         error_reply(ret, 0, &response_str); // FIXME: parameter 2
         goto reply;
@@ -1108,6 +1106,7 @@ reply:
         free(response_str);
     if (ret == MTH_TEARDOWN) // FIXME: how to free bev after TEARDOWN cmd ?
         bufferevent_free(bev);
+    free(buf);
     return;
 }
 

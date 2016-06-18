@@ -23,8 +23,6 @@ struct rtp_pkt {
     uint8_t payload[1400];
 };
 
-static pthread_t send_thread;
-
 static void clean_up(void *arg)
 {
     void *res = NULL;
@@ -32,11 +30,11 @@ static void clean_up(void *arg)
     rtsp_session *rs = (rtsp_session*)arg;
     assert(rs);
 
-    ret = pthread_cancel(send_thread);
+    ret = pthread_cancel(rs->rtp_send_thread);
     if (ret != 0)
         printf("%s: pthread_cancel for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
-    ret = pthread_join(send_thread, &res);
+    ret = pthread_join(rs->rtp_send_thread, &res);
     if (ret != 0)
         printf("%s: pthread_join for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
@@ -220,7 +218,7 @@ void* rtp_dispatch(void *arg)
         goto out;
     }
 
-    if (pthread_create(&send_thread, NULL, send_dispatch, rs) != 0) {
+    if (pthread_create(&rs->rtp_send_thread, NULL, send_dispatch, rs) != 0) {
         printf("%s: creating RTP send thread failed: %s\n", __func__, strerror(errno));
         goto out;
     }

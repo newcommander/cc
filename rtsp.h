@@ -77,7 +77,9 @@ typedef struct {
     int status;
     char session_id[32];
     pthread_t rtp_thread;
+    pthread_t rtp_send_thread;
     pthread_t rtcp_thread;
+    pthread_t rtcp_send_thread;
     Uri *uri;
     uv_loop_t rtp_loop;
     uv_loop_t rtcp_loop;

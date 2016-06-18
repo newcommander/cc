@@ -28,8 +28,6 @@ struct sr_rtcp_pkt {
     uint32_t extension[16]; // TODO: fixed size ?
 };
 
-static pthread_t send_thread;
-
 static void clean_up(void *arg)
 {
     void *res = NULL;
@@ -37,11 +35,11 @@ static void clean_up(void *arg)
     rtsp_session *rs = (rtsp_session*)arg;
     assert(rs);
 
-    ret = pthread_cancel(send_thread);
+    ret = pthread_cancel(rs->rtcp_send_thread);
     if (ret != 0)
         printf("%s: pthread_cancel for RTCP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
-    ret = pthread_join(send_thread, &res);
+    ret = pthread_join(rs->rtcp_send_thread, &res);
     if (ret != 0)
         printf("%s: pthread_join for RTCP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
@@ -257,7 +255,7 @@ void* rtcp_dispatch(void *arg)
         goto out;
     }
 
-    if (pthread_create(&send_thread, NULL, send_dispatch, rs) != 0) {
+    if (pthread_create(&rs->rtcp_send_thread, NULL, send_dispatch, rs) != 0) {
         printf("%s: creating RTCP send thread failed: %s\n", __func__, strerror(errno));
         goto out;
     }
