@@ -136,7 +136,7 @@ static int free_uri(Uri *uri, int force)
         list_del(&uri->list);
         pthread_mutex_unlock(&uri_mutex);
     } else if (force) {
-        ; // TODO: send ending uri signal
+        ; // FIXME: if any one use this uri, Segmengtation fault
         pthread_mutex_lock(&uri_mutex);
         list_del(&uri->list);
         pthread_mutex_unlock(&uri_mutex);

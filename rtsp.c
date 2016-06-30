@@ -12,8 +12,9 @@
 #include <netinet/in.h>
 
 #include "rtsp.h"
+#include "ccstream.h"
 
-status_code response_code[] = {
+static status_code response_code[] = {
     { "100", "Continue" },
     { "200", "OK" },
     { "201", "Created" },
@@ -64,10 +65,10 @@ status_code response_code[] = {
 static char active_addr[16];
 static const int PORT = 554;
 
-struct list_head session_list;
-pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct list_head session_list;
+static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-void release_rtsp_request(rtsp_request *rr)
+static void release_rtsp_request(rtsp_request *rr)
 {
     if (!rr)
         return;
@@ -1019,7 +1020,7 @@ static int convert_rtsp_request(rtsp_request **rr, struct bufferevent *bev, char
     return 0;
 }
 
-void error_reply(int code, int cseq, char **response)
+static void error_reply(int code, int cseq, char **response)
 {
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
     char code_buf[32];
@@ -1163,7 +1164,7 @@ static void signal_cb(evutil_socket_t sig, short events, void *user_data)
     event_base_loopexit(base, &delay);
 }
 
-int get_active_address(char *interface, char *buf, int len)
+static int get_active_address(char *interface, char *buf, int len)
 {
     struct sockaddr_in *sin = NULL;
     struct ifaddrs *ifa = NULL, *iflist = NULL;
@@ -1204,21 +1205,27 @@ int get_active_address(char *interface, char *buf, int len)
     return 0;
 }
 
-int main(int argc, char **argv)
+extern struct stream_arg *g_show;
+
+void* cc_stream(void *arg)
 {
     struct event_base *base;
     struct evconnlistener *listener;
     struct event *signal_event;
-    char base_url[1024];
-
     struct sockaddr_in sin;
+    char base_url[1024];
+    char *eth_name;
+
+    g_show = (struct stream_arg*)arg;
+    printf("data: %p, %d %d %d %d\n", g_show->data, g_show->dim[0], g_show->dim[1], g_show->dim[2], g_show->dim[3]);
+    eth_name = NULL;
 
     INIT_LIST_HEAD(&session_list);
     init_uri_list();
 
     memset(active_addr, 0, sizeof(active_addr));
-    if (get_active_address(NULL, active_addr, sizeof(active_addr)) != 0)
-        return 1;
+    if (get_active_address(eth_name, active_addr, sizeof(active_addr)) != 0)
+        return NULL;
 
     memset(base_url, 0, 1024);
     strncat(base_url, "rtsp://", 7);
@@ -1228,7 +1235,7 @@ int main(int argc, char **argv)
     base = event_base_new();
     if (!base) {
         fprintf(stderr, "Could not initialize libevent!\n");
-        return 1;
+        return NULL;
     }
 
     memset(&sin, 0, sizeof(sin));
@@ -1240,13 +1247,13 @@ int main(int argc, char **argv)
             LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1, (struct sockaddr*)&sin, sizeof(sin));
     if (!listener) {
         fprintf(stderr, "Could not create a listener!\n");
-        return 1;
+        return NULL;
     }
 
     signal_event = evsignal_new(base, SIGINT, signal_cb, (void *)base);
     if (!signal_event || event_add(signal_event, NULL)<0) {
         fprintf(stderr, "Could not create/add a signal event!\n");
-        return 1;
+        return NULL;
     }
 
     event_base_dispatch(base);
@@ -1257,5 +1264,5 @@ int main(int argc, char **argv)
     event_free(signal_event);
     event_base_free(base);
 
-    return 0;
+    return NULL;
 }

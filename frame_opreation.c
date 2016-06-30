@@ -1,15 +1,19 @@
 #include "rtsp.h"
+#include "ccstream.h"
 
 typedef struct {
     char *title;
     frame_opreation func;
 } uri_entry;
 
+struct stream_arg *g_show = NULL;
+
 static void lala(void *arg)
 {
     int height, width, x, y;
     rtsp_session *rs = (rtsp_session*)arg;
     AVFrame *frame;
+    float *data = (float*)g_show->data;
 
     frame = rs->frame;
     height = rs->cc->height;
@@ -18,14 +22,23 @@ static void lala(void *arg)
     /* Y */
     for (y = 0; y < height; y++) {
         for (x = 0; x < width; x++) {
+            //frame->data[0][y * frame->linesize[0] + x] = x + y + rs->pts * 3;
             frame->data[0][y * frame->linesize[0] + x] = x + y + rs->pts * 3;
         }
     }
     /* Cb and Cr */
     for (y = 0; y < height/2; y++) {
         for (x = 0; x < width/2; x++) {
-            frame->data[1][y * frame->linesize[1] + x] = 128 + y + rs->pts * 2;
-            frame->data[2][y * frame->linesize[2] + x] = 64 + x + rs->pts * 5;
+            //frame->data[1][y * frame->linesize[1] + x] = 128 + y + rs->pts * 2;
+            //frame->data[2][y * frame->linesize[2] + x] = 64 + x + rs->pts * 5;
+            frame->data[1][y * frame->linesize[1] + x] = 0;
+            frame->data[2][y * frame->linesize[2] + x] = 0;
+        }
+    }
+    for (y = 0; y < g_show->dim[3]; y++) {
+        for (x = 0; x < g_show->dim[2]; x++) {
+            frame->data[0][y * frame->linesize[0] + x] = (int)(data[y * g_show->dim[2] + x] * 3100);
+            printf("---%d\n", frame->data[0][y * frame->linesize[0] + x]);
         }
     }
     frame->pts = rs->pts++;
@@ -33,12 +46,13 @@ static void lala(void *arg)
 
 void add_uris(char *base_url)
 {
+    uri_entry *p;
+    char url[1024];
+
     uri_entry entrys[] = {
         { "lala", lala },
         { NULL, NULL }
     };
-    uri_entry *p;
-    char url[1024];
 
     for (p = entrys; p->func; p++) {
         memset(url, 0, 1024);
