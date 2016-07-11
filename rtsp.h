@@ -3,12 +3,7 @@
 
 #include <libavutil/opt.h>
 #include <libavcodec/avcodec.h>
-#include <libavutil/channel_layout.h>
-#include <libavutil/common.h>
 #include <libavutil/imgutils.h>
-#include <libavutil/mathematics.h>
-#include <libavutil/samplefmt.h>
-
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_struct.h>
 #include <event2/buffer.h>
@@ -17,8 +12,8 @@
 #include <event2/event.h>
 #include <uv.h>
 #include <pthread.h>
-#include <time.h>
 
+#include "common.h"
 #include "list.h"
 #include "uri.h"
 
@@ -35,15 +30,6 @@
 #define MTH_TEARDOWN        11
 
 #define RTSP_VERSION "RTSP/1.0"
-#define PACKET_BUFFER_SIZE 1*1024*1024
-
-#define msleep(x) \
-    do { \
-        struct timespec time_to_wait; \
-        time_to_wait.tv_sec = x / 1000; \
-        time_to_wait.tv_nsec = 1000 * 1000 * (x - time_to_wait.tv_sec * 1000); \
-        nanosleep(&time_to_wait, NULL); \
-    } while(0)
 
 typedef struct {
     char *code;
@@ -55,7 +41,7 @@ typedef struct {
     int cseq;
     char *accept;
     char *user_agent;
-	char *transport;
+    char *transport;
     char *range;
     char session_id[33];
 } rtsp_request_header;
@@ -71,6 +57,7 @@ typedef struct {
 typedef struct {
     struct bufferevent *bev;
     struct list_head list;
+    struct list_head uri_user_list;
 #define SESION_READY 0
 #define SESION_PLAYING 1
 #define SESION_IN_FREE 2

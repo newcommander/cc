@@ -6,11 +6,10 @@
 
 #include "list.h"
 
-typedef void (*frame_opreation)(void *arg);
-
 typedef struct {
     struct list_head list;
     pthread_mutex_t ref_mutex;
+    struct list_head user_list;
     int ref_counter;
     char *url;
 #define URI_IDLE 0
@@ -18,14 +17,15 @@ typedef struct {
 #define URI_IN_FREE 2
     int status;
     uint32_t ssrc;
-    frame_opreation frame_opt;
+    frame_operation frame_opt;
 } Uri;
 
-void init_uri_list();
-Uri* get_uri(char *url);
-void release_uri(Uri *uri);
-void alloc_uri(char *url, frame_opreation frame_opt);
-void add_uris(char *base_url);
-void del_uris();
+int add_uri(char *url, uint32_t ssrc, frame_operation frame_opt);
+int del_uri(Uri *uri, int force);
+Uri* find_uri(char *url);
+int ref_uri(Uri *uri, struct list_head *list);
+int unref_uri(Uri *uri, struct list_head *list);
+void uris_init(char *base_url);
+void uris_deinit();
 
 #endif

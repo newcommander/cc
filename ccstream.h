@@ -2,11 +2,12 @@
 #define CCSTREAM_H
 
 struct stream_arg {
-    const char *interface;
     void *data;
     int dim[4];
 };
 
-void* cc_stream(void *arg);
+extern struct stream_arg g_show;
+
+extern void* cc_stream(void *arg);
 
 #endif // CCSTREAM_H

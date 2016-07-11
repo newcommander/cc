@@ -35,25 +35,31 @@ static void clean_up(void *arg)
     rtsp_session *rs = (rtsp_session*)arg;
     assert(rs);
 
-    ret = pthread_cancel(rs->rtcp_send_thread);
-    if (ret != 0)
-        printf("%s: pthread_cancel for RTCP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+    if (rs->rtcp_send_thread) {
+        ret = pthread_cancel(rs->rtcp_send_thread);
+        if (ret != 0)
+            printf("%s: pthread_cancel for RTCP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
-    ret = pthread_join(rs->rtcp_send_thread, &res);
-    if (ret != 0)
-        printf("%s: pthread_join for RTCP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        ret = pthread_join(rs->rtcp_send_thread, &res);
+        if (ret != 0)
+            printf("%s: pthread_join for RTCP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        rs->rtcp_send_thread = 0;
+    }
 
     if (res == PTHREAD_CANCELED)
         ; // thread was canceled
     else
         ; // thread terminated normally
 
-    uv_udp_recv_stop(&rs->rtp_handle);
-    uv_stop(&rs->rtp_loop);
+    if (rs->rtp_thread) {
+        uv_udp_recv_stop(&rs->rtp_handle);
+        uv_stop(&rs->rtp_loop);
 
-    ret = pthread_join(rs->rtp_thread, &res);
-    if (ret != 0)
-        printf("%s: pthread_join for rtp_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        ret = pthread_join(rs->rtp_thread, &res);
+        if (ret != 0)
+            printf("%s: pthread_join for rtp_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        rs->rtp_thread = 0;
+    }
 
     if (res == PTHREAD_CANCELED)
         ; // thread was canceled
@@ -164,7 +170,6 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
         printf("%s: recive error: %s\n", __func__, uv_strerror(nread));
         return;
     }
-    printf("RTCP recv [%ld]\n", nread);
 }
 
 extern void* rtp_dispatch(void *arg);
@@ -209,6 +214,7 @@ void* send_dispatch(void *arg)
 
     if (pthread_create(&rs->rtp_thread, NULL, rtp_dispatch, rs) != 0) {
         printf("%s: creating rtp thread failed: %s\n", __func__, strerror(errno));
+        rs->rtp_thread = 0;
         return NULL;
     }
 
@@ -227,7 +233,7 @@ void* send_dispatch(void *arg)
         h.msg_iov = (struct iovec*)&uv_buf;
         h.msg_iovlen = 1;
 
-        // TODO: in fact, we don't use libuv when sending UDP packet, fix it
+        // TODO: in fact, we don't use libuv when sending UDP packet, review it
         retry = 5;
         while (retry--) {
             size = sendmsg(rs->rtcp_handle.io_watcher.fd, &h, 0);
@@ -257,6 +263,8 @@ void* rtcp_dispatch(void *arg)
 
     if (pthread_create(&rs->rtcp_send_thread, NULL, send_dispatch, rs) != 0) {
         printf("%s: creating RTCP send thread failed: %s\n", __func__, strerror(errno));
+        uv_udp_recv_stop(&rs->rtcp_handle);
+        rs->rtcp_send_thread = 0;
         goto out;
     }
 
