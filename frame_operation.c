@@ -8,6 +8,7 @@ static void lala(void *arg);
 uri_entry entrys[] = {
     { "sample", sample_function },
     { "lala", lala },
+	{ "test", test },
     { NULL, NULL }
 };
 
