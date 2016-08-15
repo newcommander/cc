@@ -45,16 +45,18 @@ static void sample_function(void *arg)
     /* Cb and Cr */
     for (y = 0; y < screen_h / 2; y++) {
         for (x = 0; x < screen_w / 2; x++) {
-            frame->data[1][y * frame->linesize[1] + x] = 0;
-            frame->data[2][y * frame->linesize[2] + x] = 0;
+            frame->data[1][y * frame->linesize[1] + x] = 128;
+            frame->data[2][y * frame->linesize[2] + x] = 128;
         }
     }
 
     for (y = 0; y < unit_h; y++) {
         for (x = 0; x < unit_w; x++) {
-            frame->data[0][y * frame->linesize[0] + x] = data[unit_w * y + x];
+            //frame->data[0][y * frame->linesize[0] + x] = data[unit_w * y + x];
+            frame->data[0][y * frame->linesize[0] + x] = rs->pts % 255;
         }
     }
+    frame->pts = rs->pts++;
 }
 
 static void lala(void *arg)

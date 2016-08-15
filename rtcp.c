@@ -219,8 +219,6 @@ void* send_dispatch(void *arg)
     }
 
     while (1) {
-        msleep(rs->rtcp_interval);
-
         gettimeofday(&tv, NULL);
         set_ntp_timestamp(&pkt, &tv);
         set_rtp_timestamp(&pkt, &tv, rs);
@@ -240,6 +238,7 @@ void* send_dispatch(void *arg)
             if (size >= 0)
                 break;
         }
+        msleep(rs->rtcp_interval);
     }
 
     return NULL;

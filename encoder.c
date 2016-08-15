@@ -3,6 +3,27 @@
 #include <math.h>
 #include "rtsp.h"
 
+static char *data_to_hex(char *buff, const uint8_t *src, int s, int lowercase)
+{
+    int i;
+    static const char hex_table_uc[16] = { '0', '1', '2', '3',
+                                           '4', '5', '6', '7',
+                                           '8', '9', 'A', 'B',
+                                           'C', 'D', 'E', 'F' };
+    static const char hex_table_lc[16] = { '0', '1', '2', '3',
+                                           '4', '5', '6', '7',
+                                           '8', '9', 'a', 'b',
+                                           'c', 'd', 'e', 'f' };
+    const char *hex_table = lowercase ? hex_table_lc : hex_table_uc;
+
+    for (i = 0; i < s; i++) {
+        buff[i * 2]     = hex_table[src[i] >> 4];
+        buff[i * 2 + 1] = hex_table[src[i] & 0xF];
+    }
+
+    return buff;
+}
+
 static int samping_frame(rtsp_session *rs, unsigned char *data, int *len)
 {
     int ret = 0, got_output = 0;
@@ -60,6 +81,7 @@ int encoder_init(rtsp_session *rs)
 {
     AVCodec *codec = NULL;
     int codec_id = AV_CODEC_ID_MPEG4;
+    //int codec_id = AV_CODEC_ID_H264;
     int ret = 0;
     char errbuf[100];
 
@@ -85,13 +107,12 @@ int encoder_init(rtsp_session *rs)
         }
     }
 
-    /* put sample parameters */
-    rs->cc->bit_rate = 400000;
-    /* resolution must be a multiple of two */
-    rs->cc->width = 1000;
-    rs->cc->height = 650;
     /* frames per second */
     rs->cc->time_base = (AVRational){1,25};
+    rs->cc->bit_rate = 400000;
+    /* resolution must be a multiple of two */
+    rs->cc->width = 600;
+    rs->cc->height = 400;
     /* emit one intra frame every ten frames
      * check frame pict_type before passing frame
      * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
@@ -102,15 +123,16 @@ int encoder_init(rtsp_session *rs)
     rs->cc->max_b_frames = 1;
     rs->cc->pix_fmt = AV_PIX_FMT_YUV420P;
 
-    if (codec_id == AV_CODEC_ID_H264)
+    if (codec_id == AV_CODEC_ID_H264) {
         av_opt_set(rs->cc->priv_data, "preset", "slow", 0);
+        av_opt_set(rs->cc->priv_data, "allow_skip_frames", "enable", 0);
+    } else if (codec_id == AV_CODEC_ID_MPEG4)
+        rs->cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
     /* open it */
-    if (!avcodec_is_open(rs->cc)) {
-        if (avcodec_open2(rs->cc, codec, NULL) < 0) {
-            printf("%s: Could not open codec\n", __func__);
-            goto failed;
-        }
+    if (avcodec_open2(rs->cc, codec, NULL) < 0) {
+        printf("%s: Could not open codec\n", __func__);
+        goto failed;
     }
 
     if (!rs->frame) {
@@ -124,6 +146,12 @@ int encoder_init(rtsp_session *rs)
     rs->frame->width  = rs->cc->width;
     rs->frame->height = rs->cc->height;
 
+    char *config = (char*)calloc(rs->cc->extradata_size * 2 + 1, 1);
+    data_to_hex(config, rs->cc->extradata, rs->cc->extradata_size, 0);
+    printf("config_size=%d\n", rs->cc->extradata_size);
+    printf("config=%s\n", config);
+    free(config);
+
     if (!rs->frame->data[0]) {
         ret = av_image_alloc(rs->frame->data, rs->frame->linesize, rs->cc->width, rs->cc->height, rs->cc->pix_fmt, 32);
         if (ret < 0) {
@@ -136,15 +164,15 @@ int encoder_init(rtsp_session *rs)
     return 0;
 
 failed:
-    if (avcodec_is_open(rs->cc))
-        avcodec_close(rs->cc);
     if (rs->cc) {
+        if (avcodec_is_open(rs->cc))
+            avcodec_close(rs->cc);
         av_free(rs->cc);
         rs->cc = NULL;
     }
-    if (rs->frame->data[0])
-        av_freep(&rs->frame->data[0]);
     if (rs->frame) {
+        if (rs->frame->data[0])
+            av_freep(&rs->frame->data[0]);
         av_frame_free(&rs->frame);
         rs->frame = NULL;
     }
