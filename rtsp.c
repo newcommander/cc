@@ -63,6 +63,7 @@ static status_code response_code[] = {
 
 static char active_addr[128];
 static const int PORT = 554;
+static char base_url[1024];
 
 static struct list_head session_list;
 static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -410,20 +411,20 @@ static int make_sdp_string(char **buf)
 {
     char *version = "v=0\r\n";
     char *origin = "o=- 1 1 IN IP4 0.0.0.0\r\n";
-    char *session_name = "s=RTSP Session\r\n";
-    char *session_info = "i=nihao\r\n";
+    char *session_name = "s=live from cc\r\n";
+    char *session_info = "i=hello, session infomation\r\n";
     char *connection_info = "c=IN IP4 192.168.0.123\r\n";
     char *time = "t=0 0\r\n";
-    char *session_attr = "a=range:npt=now-\r\na=control:*\r\n";
+    char *session_attr = "a=range:npt=now-\r\na=control:rtsp://192.168.0.123/\r\n";
+    //char *session_control = "a=control:" + base_url +  "\r\n";
     char *media_desc = "m=video 0 RTP/AVP 96\r\n";
     char *bandwidth_info = "b=AS:500\r\n";
     char *media_attr1 = "a=rtpmap:96 MP4V-ES/90000\r\n";
     //char *media_attr = "a=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z2QAH6zZQEAEmhAAAAMAEAAAAwMo8YMZYA==,aOvjyyLA\r\n";
-    char *media_attr2 = "a=fmtp:96 profile-level-id=1;config=000001B001000001B58913000001000000012000C48D8800CD12C4321463000001B24C61766335372E32342E313032\r\n";
+    char *media_attr2 = "a=fmtp:96 config=000001B001000001B58913000001000000012000C48D8800CD12C4321463000001B24C61766335372E32342E313032\r\n";
     char *media_attr3 = "a=framerate:25\r\n";
     char *media_attr4 = "a=framesize:96 600-400\r\n";
-    //char *media_attr5 = "a=control:sample\r\n";
-    char *media_attr5 = "";
+    char *media_attr5 = "a=control:trackID=1\r\n";
     struct timeval tv;
 
     if (!buf) {
@@ -433,15 +434,18 @@ static int make_sdp_string(char **buf)
     }
 
     gettimeofday(&tv, NULL);
-/*
+
+    /*
     char origin[1024];
     memset(origin, 0, 1024);
-    strncat(origin, "o=- ", 6);
+    strncat(origin, "o=- ", 4);
     snprintf(origin + strlen(origin), 20, "%ld.%ld ", tv.tv_sec, tv.tv_usec);
     strncat(origin, "1 IN IP4 ", 9);
     strncat(origin, active_addr, strlen(active_addr));
     strncat(origin, "\r\n", 2);
-*/
+    printf("[%ld]%s\n", strlen(origin), origin);
+    */
+
     *buf = (char*)calloc(strlen(version) + strlen(origin) + strlen(session_name) + strlen(session_info) + \
             strlen(connection_info) + strlen(time) + strlen(session_attr) + strlen(media_desc) + \
             strlen(bandwidth_info) + strlen(media_attr1) + strlen(media_attr2) + strlen(media_attr3) + \
@@ -1268,7 +1272,6 @@ void* cc_stream(void *arg)
     struct evconnlistener *listener;
     struct event *signal_event;
     struct sockaddr_in sin;
-    char base_url[1024];
     char *nic_name = (char*)arg;
 
     INIT_LIST_HEAD(&session_list);
