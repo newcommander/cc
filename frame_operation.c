@@ -7,8 +7,8 @@ static void lala(void *arg);
 
 uri_entry entrys[] = {
     { "sample", sample_function },
+    { "trackID=1", sample_function },
     { "lala", lala },
-	{ "test", test },
     { NULL, NULL }
 };
 

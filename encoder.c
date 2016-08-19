@@ -1,7 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include "rtsp.h"
 
 static char *data_to_hex(char *buff, const uint8_t *src, int s, int lowercase)
 {
@@ -24,13 +23,13 @@ static char *data_to_hex(char *buff, const uint8_t *src, int s, int lowercase)
     return buff;
 }
 
-static int samping_frame(rtsp_session *rs, unsigned char *data, int *len)
+static int samping_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *data, int *len)
 {
     int ret = 0, got_output = 0;
     char errbuf[100];
     AVPacket pkt;
 
-    if (!rs || !rs->cc || !rs->frame) {
+    if (!cc || !frame) {
         printf("%s: Invalid parameter\n", __func__);
         return -1;
     }
@@ -47,14 +46,14 @@ static int samping_frame(rtsp_session *rs, unsigned char *data, int *len)
     rs->uri->frame_opt(rs);
 
     /* encode the image */
-    ret = avcodec_encode_video2(rs->cc, &pkt, rs->frame, &got_output);
+    ret = avcodec_encode_video2(cc, &pkt, frame, &got_output);
     if (ret < 0) {
         av_strerror(ret, errbuf, sizeof(errbuf));
         printf("%s: Error encoding frame [first]: %s\n", __func__, errbuf);
         return -1;
     }
     if (!got_output) {
-        ret = avcodec_encode_video2(rs->cc, &pkt, NULL, &got_output);
+        ret = avcodec_encode_video2(cc, &pkt, NULL, &got_output);
         if (ret < 0) {
             av_strerror(ret, errbuf, sizeof(errbuf));
             printf("%s: Error encoding frame [second]: %s\n", __func__, errbuf);
@@ -74,6 +73,28 @@ static int samping_frame(rtsp_session *rs, unsigned char *data, int *len)
         printf("%s: Not got packet\n", __func__);
         return -1;
     }
+    return 0;
+}
+
+int video_encoding(rtsp_session *rs, unsigned char *data, int *len)
+{
+    int ret = 0;
+
+    if (!rs) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+
+    if (!rs->cc || !rs->frame) {
+        ret = encoder_init(rs);
+        if (ret < 0)
+            return -1;
+    }
+
+    ret = samping_frame(rs, data, len);
+    if (ret < 0)
+        return -1;
+
     return 0;
 }
 
@@ -198,26 +219,3 @@ void encoder_deinit(rtsp_session *rs)
         rs->frame = NULL;
     }
 }
-
-int video_encoding(rtsp_session *rs, unsigned char *data, int *len)
-{
-    int ret = 0;
-
-    if (!rs) {
-        printf("%s: Invalid parameter\n", __func__);
-        return -1;
-    }
-
-    if (!rs->cc || !rs->frame) {
-        ret = encoder_init(rs);
-        if (ret < 0)
-            return -1;
-    }
-
-    ret = samping_frame(rs, data, len);
-    if (ret < 0)
-        return -1;
-
-    return 0;
-}
-

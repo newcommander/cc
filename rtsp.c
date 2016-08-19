@@ -415,7 +415,8 @@ static int make_sdp_string(char **buf)
     char *session_info = "i=hello, session infomation\r\n";
     char *connection_info = "c=IN IP4 192.168.0.123\r\n";
     char *time = "t=0 0\r\n";
-    char *session_attr = "a=range:npt=now-\r\na=control:rtsp://192.168.0.123/\r\n";
+    //char *session_attr = "a=range:npt=now-\r\na=control:rtsp://192.168.0.113/\r\n";
+    char *session_attr = "a=range:npt=now-\r\n";
     //char *session_control = "a=control:" + base_url +  "\r\n";
     char *media_desc = "m=video 0 RTP/AVP 96\r\n";
     char *bandwidth_info = "b=AS:500\r\n";

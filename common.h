@@ -1,6 +1,20 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <libavutil/opt.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/imgutils.h>
+#include <event2/bufferevent.h>
+#include <event2/bufferevent_struct.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
+#include <event2/util.h>
+#include <event2/event.h>
+#include <uv.h>
+
+#include <stdint.h>
+
+#include <pthread.h>
 #include <time.h>
 
 #define msleep(x) \
@@ -17,6 +31,7 @@ typedef void (*frame_operation)(void *arg);
 
 typedef struct {
     char *title;
+	char *sdp_string;
     frame_operation func;
 } uri_entry;
 

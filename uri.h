@@ -1,9 +1,7 @@
 #ifndef URI_H
 #define URI_H
 
-#include <stdint.h>
-#include <pthread.h>
-
+#include "common.h"
 #include "list.h"
 
 typedef struct {
@@ -18,6 +16,8 @@ typedef struct {
     int status;
     uint32_t ssrc;
     frame_operation frame_opt;
+	int width;
+	int height
 } Uri;
 
 int add_uri(char *url, uint32_t ssrc, frame_operation frame_opt);
