@@ -1,15 +1,92 @@
+#include <uv.h>
+
+#include "common.h"
 #include "session.h"
 
-struct list_head session_list; //TODO: INIT(session_list)
+extern char active_addr[128];
+
+struct list_head session_list;
+pthread_mutex_t session_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* NOTE: please call bufferevent_free(se->bev) according your situation */
+void session_destroy(struct session *se)
+{
+    void *res = NULL;
+    int ret = 0, retry;
+
+    if (!se)
+        return;
+
+    switch(se->status) {
+    case SESION_READY:
+        unref_uri(se->uri, &se->uri_user_list);
+        se->status = SESION_IN_FREE;
+        break;
+    case SESION_PLAYING:
+        unref_uri(se->uri, &se->uri_user_list);
+        if (se->rtcp_thread) {
+            uv_udp_recv_stop(&se->rtcp_handle);
+            uv_stop(&se->rtcp_loop);
+            ret = pthread_join(se->rtcp_thread, &res);
+            if (ret != 0)
+                printf("%s: pthread_join for rtcp_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+            se->rtcp_thread = 0;
+        }
+        se->status = SESION_IN_FREE;
+        break;
+    case SESION_IN_FREE:
+		break;
+    }
+
+    if (se->status != SESION_IN_FREE) {
+        printf("%s: Could not destroy session on %s\n", __func__, se->uri->url);
+        return;
+    }
+    pthread_mutex_lock(&session_list_mutex);
+    list_del(&se->list);
+    pthread_mutex_unlock(&session_list_mutex);
+
+    retry = 10;
+    while (retry--) {
+        if (uv_loop_close(&se->rtcp_loop) != 0)
+            msleep(200);
+        else
+            break;
+    }
+    retry = 10;
+    while (retry--) {
+        if (uv_loop_close(&se->rtp_loop) != 0)
+            msleep(200);
+        else
+            break;
+    }
+
+    bufferevent_free(se->bev);
+
+    if (se->cc) {
+        if (avcodec_is_open(se->cc))
+            avcodec_close(se->cc);
+        av_free(se->cc);
+        se->cc = NULL;
+    }
+    if (se->frame) {
+        if (se->frame->data[0])
+            av_freep(&se->frame->data[0]);
+        av_frame_free(&se->frame);
+        se->frame = NULL;
+    }
+
+    free(se);
+}
 
 struct session *session_create(char *url, struct bufferevent *bev, int client_rtp_port, int client_rtcp_port)
 {
 	struct session *se = NULL;
+    struct Uri *uri = NULL;
     struct timeval tv;
     struct sockaddr clit_addr;
     struct sockaddr_in *clit_addr_in;
     socklen_t addr_len = sizeof(struct sockaddr);
-    Uri *uri = NULL;
     int port, ret;
     char clit_ip[16];
 
@@ -46,10 +123,10 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
         return NULL;
     }
     se->uri = uri;
-    se->bev = rr->bev;
+    se->bev = bev;
     se->bev->wm_read.private_data = se;
-    uv_ip4_addr(clit_ip, c_rtp_port, &se->clit_rtp_addr);
-    uv_ip4_addr(clit_ip, c_rtcp_port, &se->clit_rtcp_addr);
+    uv_ip4_addr(clit_ip, client_rtp_port, &se->clit_rtp_addr);
+    uv_ip4_addr(clit_ip, client_rtcp_port, &se->clit_rtcp_addr);
 
     ret = uv_loop_init(&se->rtp_loop);
     if (ret != 0) {
@@ -104,11 +181,14 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
         printf("%s: Cannot reference uri(%s)\n", __func__, se->uri->url);
         goto failed;
     }
+
+    //TODO: how to decied encoder_name ??
+    snprintf(se->encoder_name, 5, "mpeg4");
     se->status = SESION_READY;
 
-    pthread_mutex_lock(&session_mutex);
+    pthread_mutex_lock(&session_list_mutex);
     list_add(&se->list, &session_list);
-    pthread_mutex_unlock(&session_mutex);
+    pthread_mutex_unlock(&session_list_mutex);
 
     return se;
 
@@ -119,55 +199,7 @@ failed:
 failed_rtcp_loop_init:
     uv_loop_close(&se->rtp_loop);
 failed_rtp_loop_init:
-    release_rtsp_session(se);
+    session_destroy(se);
     return NULL;
 }
 
-/* NOTE: please call bufferevent_free(se->bev) according your situation */
-void session_destroy(struct session *se)
-{
-    void *res = NULL;
-    int ret = 0;
-
-    if (!se)
-        return;
-
-    switch(se->status) {
-    case SESION_READY:
-        unref_uri(se->uri, &se->uri_user_list);
-        se->status = SESION_IN_FREE;
-        break;
-    case SESION_PLAYING:
-        unref_uri(se->uri, &se->uri_user_list);
-        if (se->rtcp_thread) {
-            uv_udp_recv_stop(&se->rtcp_handle);
-            uv_stop(&se->rtcp_loop);
-            ret = pthread_join(se->rtcp_thread, &res);
-            if (ret != 0)
-                printf("%s: pthread_join for rtcp_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-            se->rtcp_thread = 0;
-        }
-        se->status = SESION_IN_FREE;
-        break;
-    case SESION_IN_FREE:
-		break;
-    }
-
-    if (se->status != SESION_IN_FREE) {
-        printf("%s: Could not destroy session on %s\n", __func__, se->uri->url);
-        return;
-    }
-
-    pthread_mutex_lock(&session_mutex);
-    list_del(&se->list);
-    pthread_mutex_unlock(&session_mutex);
-
-	//TODO:
-	//free AVCodecContext
-	//free AVFrame
-    free(se);
-}
-
-void session_play(struct session *se)
-{
-}

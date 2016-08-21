@@ -1,10 +1,6 @@
 #ifndef RTSP_H
 #define RTSP_H
 
-#include "common.h"
-#include "list.h"
-#include "uri.h"
-
 #define MTH_DESCRIBE        1
 #define MTH_ANNOUNCE        2
 #define MTH_GET_PARAMETER   3
@@ -19,59 +15,32 @@
 
 #define RTSP_VERSION "RTSP/1.0"
 
-typedef struct {
+struct status_code {
     char *code;
     char *phrase;
-} status_code;
+};
 
 //do NOT alloc this cause never free
-typedef struct {
-    int cseq;
-    char *accept;
+struct rtsp_request_header {
+    char session_id[33];
     char *user_agent;
     char *transport;
+    char *accept;
     char *range;
-    char session_id[33];
-} rtsp_request_header;
+    int cseq;
+};
 
-typedef struct {
+struct rtsp_request {
+    struct rtsp_request_header rh;
+    struct bufferevent *bev;
+    char version[33];
     int method;
     char *url;
-    char version[33];
-    rtsp_request_header rh;
-    struct bufferevent *bev;
-} rtsp_request;
+};
 
-typedef struct {
-    struct bufferevent *bev;
-    struct list_head list;
-    struct list_head uri_user_list;
-#define SESION_READY 0
-#define SESION_PLAYING 1
-#define SESION_IN_FREE 2
-    int status;
-    char session_id[32];
-    pthread_t rtp_thread;
-    pthread_t rtp_send_thread;
-    pthread_t rtcp_thread;
-    pthread_t rtcp_send_thread;
-    Uri *uri;
-    uv_loop_t rtp_loop;
-    uv_loop_t rtcp_loop;
-    uv_udp_t rtp_handle;
-    uv_udp_t rtcp_handle;
-    struct sockaddr_in serv_rtp_addr;
-    struct sockaddr_in clit_rtp_addr;
-    struct sockaddr_in serv_rtcp_addr;
-    struct sockaddr_in clit_rtcp_addr;
-    uint32_t timestamp_offset;
-    uint32_t samping_rate;
-    uint32_t packet_count;
-    uint32_t octet_count;
-    int rtcp_interval;  // ms
-    AVCodecContext *cc;
-    AVFrame *frame;
-    int pts;
-} rtsp_session;
+extern int convert_rtsp_request(struct rtsp_request **rr, struct bufferevent *bev, char *buf, int len);
+extern void error_reply(int code, int cseq, char **response);
+extern int make_response(struct rtsp_request *rr, char **buf);
+extern void release_rtsp_request(struct rtsp_request *rr);
 
 #endif

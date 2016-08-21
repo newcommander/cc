@@ -1,41 +1,45 @@
+#include <stdio.h>
+
+#include <libavutil/opt.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/imgutils.h>
+
 #include "ccstream.h"
-#include "common.h"
-#include "rtsp.h"
+#include "uri.h"
 
-static void sample_function(void *arg);
-static void lala(void *arg);
+static int sampling(void *_frame, int screen_w, int screen_h);
+static int lala(void *_frame, int screen_w, int screen_h);
 
-uri_entry entrys[] = {
-    { "sample", sample_function },
-    { "trackID=1", sample_function },
-    { "lala", lala },
-    { NULL, NULL }
+struct uri_entry entrys[] = {
+    { "sample", "trackID=1", 600, 400, 25, sampling },
+    { "lala", "trackID=1", 600, 400, 25, lala },
+    { NULL, NULL, 0, 0, 0, NULL }
 };
 
 struct stream_arg g_show;
 
-static void sample_function(void *arg)
+static int sampling(void *_frame, int screen_w, int screen_h)
 {
-    rtsp_session *rs = (rtsp_session*)arg;
-    AVFrame *frame;
-    int screen_w, screen_h, unit_w, unit_h, channle, num;
-    int x, y;
+    AVFrame *frame = (AVFrame*)_frame;
     uint8_t *data = NULL;
+    int object_w, object_h, channle, num;
+    int x, y;
 
-    if (!rs)
-        return;
+    if (!frame || screen_w <= 0 || screen_h <= 0) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
 
-    data     = g_show.data;
-    unit_w   = g_show.dim[0];
-    unit_h   = g_show.dim[1];
-    channle  = g_show.dim[2];
-    num      = g_show.dim[3];
-    frame    = rs->frame;
-    screen_w = rs->cc->width;
-    screen_h = rs->cc->height;
+    data       = g_show.data;
+    object_w   = g_show.dim[0];
+    object_h   = g_show.dim[1];
+    channle    = g_show.dim[2];
+    num        = g_show.dim[3];
 
-    if (unit_w > screen_w || unit_h > screen_h)
-        return;
+    if (object_w > screen_w || object_h > screen_h) {
+        printf("%s: Screen too small\n", __func__);
+        return -1;
+    }
 
     /* Y */
     for (y = 0; y < screen_h; y++) {
@@ -51,26 +55,23 @@ static void sample_function(void *arg)
         }
     }
 
-    for (y = 0; y < unit_h; y++) {
-        for (x = 0; x < unit_w; x++) {
-            //frame->data[0][y * frame->linesize[0] + x] = data[unit_w * y + x];
-            frame->data[0][y * frame->linesize[0] + x] = rs->pts % 255;
+    for (y = 0; y < object_h; y++) {
+        for (x = 0; x < object_w; x++) {
+            //frame->data[0][y * frame->linesize[0] + x] = data[object_w * y + x];
+            frame->data[0][y * frame->linesize[0] + x] = frame->pts % 255;
         }
     }
-    frame->pts = rs->pts++;
+
+    return 0;
 }
 
-static void lala(void *arg)
+static int lala(void *_frame, int screen_w, int screen_h)
 {
-    int screen_h, screen_w, unit_h, unit_w;
+    int unit_h, unit_w;
     int num, channle, i, j, x, y, units_in_line;
-    rtsp_session *rs = (rtsp_session*)arg;
-    AVFrame *frame;
+    AVFrame *frame = (AVFrame*)_frame;
     float *data = (float*)g_show.data;
 
-    frame = rs->frame;
-    screen_h = rs->cc->height;
-    screen_w = rs->cc->width;
     unit_w = g_show.dim[1];
     unit_h = g_show.dim[0];
     channle = g_show.dim[2];
@@ -90,6 +91,7 @@ static void lala(void *arg)
             frame->data[2][y * frame->linesize[2] + x] = 0;
         }
     }
+
     for (i = 0; i < num; i++) {
         j = i % units_in_line;
         i = i / units_in_line;
@@ -100,6 +102,7 @@ static void lala(void *arg)
         }
         i = i * units_in_line + j;
     }
-    frame->pts = rs->pts++;
+
+    return 0;
 }
 

@@ -7,8 +7,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <assert.h>
+#include <uv.h>
 
-#include "rtsp.h"
+#include "common.h"
+#include "session.h"
+#include "uri.h"
 
 #define RTCP_VERSION_MASK 0xc0000000
 #define RTCP_PADDING_MASK 0x20000000
@@ -32,18 +35,18 @@ static void clean_up(void *arg)
 {
     void *res = NULL;
     int ret = 0;
-    rtsp_session *rs = (rtsp_session*)arg;
-    assert(rs);
+    struct session *se = (struct session*)arg;
+    assert(se);
 
-    if (rs->rtcp_send_thread) {
-        ret = pthread_cancel(rs->rtcp_send_thread);
+    if (se->rtcp_send_thread) {
+        ret = pthread_cancel(se->rtcp_send_thread);
         if (ret != 0)
             printf("%s: pthread_cancel for RTCP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
-        ret = pthread_join(rs->rtcp_send_thread, &res);
+        ret = pthread_join(se->rtcp_send_thread, &res);
         if (ret != 0)
             printf("%s: pthread_join for RTCP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        rs->rtcp_send_thread = 0;
+        se->rtcp_send_thread = 0;
     }
 
     if (res == PTHREAD_CANCELED)
@@ -51,14 +54,14 @@ static void clean_up(void *arg)
     else
         ; // thread terminated normally
 
-    if (rs->rtp_thread) {
-        uv_udp_recv_stop(&rs->rtp_handle);
-        uv_stop(&rs->rtp_loop);
+    if (se->rtp_thread) {
+        uv_udp_recv_stop(&se->rtp_handle);
+        uv_stop(&se->rtp_loop);
 
-        ret = pthread_join(rs->rtp_thread, &res);
+        ret = pthread_join(se->rtp_thread, &res);
         if (ret != 0)
             printf("%s: pthread_join for rtp_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        rs->rtp_thread = 0;
+        se->rtp_thread = 0;
     }
 
     if (res == PTHREAD_CANCELED)
@@ -120,21 +123,21 @@ static void set_ntp_timestamp(struct sr_rtcp_pkt *pkt, struct timeval *tv)
     pkt->ntp_timestamp_lsw = htonl((uint32_t)((double)tv->tv_usec * 1.0e-6 * (((uint64_t)1) << 32)));
 }
 
-uint32_t timeval_to_rtp_timestamp(struct timeval *tv, rtsp_session *rs)
+uint32_t timeval_to_rtp_timestamp(struct timeval *tv, struct session *se)
 {
     uint32_t increment;
-    if (!tv || !rs)
+    if (!tv || !se)
         return (uint32_t)-1;
-    increment = rs->samping_rate * tv->tv_sec;
-    increment += (uint32_t)((tv->tv_usec / 1000000.0) * rs->samping_rate);
-    return rs->timestamp_offset + increment;
+    increment = se->samping_rate * tv->tv_sec;
+    increment += (uint32_t)((tv->tv_usec / 1000000.0) * se->samping_rate);
+    return se->timestamp_offset + increment;
 }
 
-static void set_rtp_timestamp(struct sr_rtcp_pkt *pkt, struct timeval *tv, rtsp_session *rs)
+static void set_rtp_timestamp(struct sr_rtcp_pkt *pkt, struct timeval *tv, struct session *se)
 {
     if (!pkt)
         return;
-    pkt->rtp_timestamp = htonl(timeval_to_rtp_timestamp(tv, rs));
+    pkt->rtp_timestamp = htonl(timeval_to_rtp_timestamp(tv, se));
 }
 
 static void set_source_count(void *pkt, uint32_t count)
@@ -142,7 +145,7 @@ static void set_source_count(void *pkt, uint32_t count)
     set_report_count((struct sr_rtcp_pkt*)pkt, count);
 }
 
-static void add_src_desc(struct sr_rtcp_pkt *pkt, rtsp_session *rs)
+static void add_src_desc(struct sr_rtcp_pkt *pkt, struct session *se)
 {
     set_version(pkt);
     clear_padding(pkt);
@@ -150,7 +153,7 @@ static void add_src_desc(struct sr_rtcp_pkt *pkt, rtsp_session *rs)
     set_pkt_type(pkt, 202);
     set_pkt_length(pkt, 3);
     pkt->header = htonl(pkt->header);
-    pkt->ssrc = htonl(rs->uri->ssrc);
+    pkt->ssrc = htonl(se->uri->ssrc);
     pkt->ntp_timestamp_msw = htonl(0x01026464);
     pkt->ntp_timestamp_lsw = htonl(0x00000000);
 }
@@ -175,7 +178,7 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
 extern void* rtp_dispatch(void *arg);
 void* send_dispatch(void *arg)
 {
-    rtsp_session *rs = (rtsp_session*)arg;
+    struct session *se = (struct session*)arg;
     struct sr_rtcp_pkt pkt;
     struct timeval tv;
     struct msghdr h;
@@ -183,50 +186,50 @@ void* send_dispatch(void *arg)
     ssize_t size;
     int retry;
 
-    if (!rs)
+    if (!se)
         return NULL;
 
     memset(&pkt, 0, sizeof(pkt));
 
-    rs->timestamp_offset = (uint32_t)rand();
-    rs->samping_rate = 90000;
-    rs->rtcp_interval = 1500;
+    se->timestamp_offset = (uint32_t)rand();
+    se->samping_rate = 90000;
+    se->rtcp_interval = 1500;
 
     set_pkt_header(&pkt);
-    pkt.ssrc = htonl(rs->uri->ssrc);
+    pkt.ssrc = htonl(se->uri->ssrc);
 
     gettimeofday(&tv, NULL);
     set_ntp_timestamp(&pkt, &tv);
-    set_rtp_timestamp(&pkt, &tv, rs);
-    pkt.packet_count = htonl(rs->packet_count);
-    pkt.octet_count = htonl(rs->octet_count);
-    add_src_desc((struct sr_rtcp_pkt*)pkt.extension, rs);
+    set_rtp_timestamp(&pkt, &tv, se);
+    pkt.packet_count = htonl(se->packet_count);
+    pkt.octet_count = htonl(se->octet_count);
+    add_src_desc((struct sr_rtcp_pkt*)pkt.extension, se);
 
     uv_buf.base = (char*)&pkt;
     uv_buf.len = 44; // TODO: how to compute length ?
 
     retry = 5;
     while (retry--) {
-        size = sendmsg(rs->rtcp_handle.io_watcher.fd, &h, 0);
+        size = sendmsg(se->rtcp_handle.io_watcher.fd, &h, 0);
         if (size >= 0)
             break;
     }
 
-    if (pthread_create(&rs->rtp_thread, NULL, rtp_dispatch, rs) != 0) {
+    if (pthread_create(&se->rtp_thread, NULL, rtp_dispatch, se) != 0) {
         printf("%s: creating rtp thread failed: %s\n", __func__, strerror(errno));
-        rs->rtp_thread = 0;
+        se->rtp_thread = 0;
         return NULL;
     }
 
     while (1) {
         gettimeofday(&tv, NULL);
         set_ntp_timestamp(&pkt, &tv);
-        set_rtp_timestamp(&pkt, &tv, rs);
-        pkt.packet_count = htonl(rs->packet_count);
-        pkt.octet_count = htonl(rs->octet_count);
+        set_rtp_timestamp(&pkt, &tv, se);
+        pkt.packet_count = htonl(se->packet_count);
+        pkt.octet_count = htonl(se->octet_count);
 
         memset(&h, 0, sizeof(struct msghdr));
-        h.msg_name = &rs->clit_rtcp_addr;
+        h.msg_name = &se->clit_rtcp_addr;
         h.msg_namelen = sizeof(struct sockaddr_in);
         h.msg_iov = (struct iovec*)&uv_buf;
         h.msg_iovlen = 1;
@@ -234,11 +237,11 @@ void* send_dispatch(void *arg)
         // TODO: in fact, we don't use libuv when sending UDP packet, review it
         retry = 5;
         while (retry--) {
-            size = sendmsg(rs->rtcp_handle.io_watcher.fd, &h, 0);
+            size = sendmsg(se->rtcp_handle.io_watcher.fd, &h, 0);
             if (size >= 0)
                 break;
         }
-        msleep(rs->rtcp_interval);
+        msleep(se->rtcp_interval);
     }
 
     return NULL;
@@ -248,34 +251,34 @@ static void timeout_cb(uv_timer_t *timer) {}
 
 void* rtcp_dispatch(void *arg)
 {
-    rtsp_session *rs = (rtsp_session*)arg;
+    struct session *se = (struct session*)arg;
     uv_timer_t timeout;
     int ret = 0;
 
-    pthread_cleanup_push(clean_up, rs);
+    pthread_cleanup_push(clean_up, se);
 
-    ret = uv_udp_recv_start(&rs->rtcp_handle, alloc_cb, recv_cb);
+    ret = uv_udp_recv_start(&se->rtcp_handle, alloc_cb, recv_cb);
     if (ret != 0) {
         printf("%s: starting RTCP recive error: %s\n", __func__, uv_strerror(ret));
         goto out;
     }
 
-    if (pthread_create(&rs->rtcp_send_thread, NULL, send_dispatch, rs) != 0) {
+    if (pthread_create(&se->rtcp_send_thread, NULL, send_dispatch, se) != 0) {
         printf("%s: creating RTCP send thread failed: %s\n", __func__, strerror(errno));
-        uv_udp_recv_stop(&rs->rtcp_handle);
-        rs->rtcp_send_thread = 0;
+        uv_udp_recv_stop(&se->rtcp_handle);
+        se->rtcp_send_thread = 0;
         goto out;
     }
 
-    ret = uv_timer_init(&rs->rtcp_loop, &timeout);
+    ret = uv_timer_init(&se->rtcp_loop, &timeout);
     assert(ret == 0);
     ret = uv_timer_start(&timeout, timeout_cb, 500, 500);
     assert(ret == 0);
-    uv_run(&rs->rtcp_loop, UV_RUN_DEFAULT);
+    uv_run(&se->rtcp_loop, UV_RUN_DEFAULT);
 
     pthread_cleanup_pop(1);
 
 out:
-    uv_loop_close(&rs->rtcp_loop);
+    uv_loop_close(&se->rtcp_loop);
     return NULL;
 }

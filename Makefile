@@ -15,7 +15,7 @@ CFLAGS=-g -Wall -fPIC
 LFLAGS=-lavcodec -lswresample -lavutil -pthread \
        -lz -lrt -lm -levent_core -luv -shared
 
-OBJ=uri.o rtsp.o rtcp.o rtp.o encoder.o frame_operation.o
+OBJ=uri.o session.o encoder.o sample_functions.o rtp.o rtcp.o rtsp.o ccstream.o
 
 TARGET=libccstream.so
 INSTALL_DIR=/usr/lib64/
@@ -33,8 +33,8 @@ install:
 	cp -f $(TARGET) /usr/lib/
 	cp -f $(TARGET) /usr/lib64/
 
-sample:
-	$(CC) $(CFLAGS) -L./ -lccstream -pthread sample.c -o main
+example:
+	$(CC) $(CFLAGS) -L./ -lccstream -pthread example.c -o main
 
 clean:
 	rm -f $(TARGET) *.o main

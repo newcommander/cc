@@ -1,7 +1,21 @@
 #ifndef SESSION_H
 #define SESSION_H
 
+#include <libavutil/opt.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/imgutils.h>
+#include <event2/bufferevent.h>
+#include <event2/bufferevent_struct.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
+#include <event2/util.h>
+#include <event2/event.h>
+#include <uv.h>
+
+#include <pthread.h>
+
 #include "list.h"
+#include "uri.h"
 
 struct session {
 #define SESION_READY 0
@@ -16,7 +30,7 @@ struct session {
     pthread_t rtp_send_thread;
     pthread_t rtcp_thread;
     pthread_t rtcp_send_thread;
-    Uri *uri;
+    struct Uri *uri;
     uv_loop_t rtp_loop;
     uv_loop_t rtcp_loop;
     uv_udp_t rtp_handle;
@@ -30,9 +44,17 @@ struct session {
     uint32_t packet_count;
     uint32_t octet_count;
     int rtcp_interval;  // ms
+    char encoder_name[128];
     AVCodecContext *cc;
     AVFrame *frame;
     int pts;
 };
 
+#include "encoder.h"
+
+extern struct list_head session_list;
+
+extern void session_destroy(struct session *se);
+extern struct session *session_create(char *url, struct bufferevent *bev,
+        int client_rtp_port, int client_rtcp_port);
 #endif

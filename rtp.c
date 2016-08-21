@@ -6,8 +6,10 @@
 #include <sys/time.h>
 #include <assert.h>
 
+#include "common.h"
+#include "session.h"
 #include "encoder.h"
-#include "rtsp.h"
+#include "uri.h"
 
 #define RTP_VERSION_MASK 0xc0000000
 #define RTP_PADDING_MASK 0x20000000
@@ -28,18 +30,18 @@ static void clean_up(void *arg)
 {
     void *res = NULL;
     int ret = 0;
-    rtsp_session *rs = (rtsp_session*)arg;
-    assert(rs);
+    struct session *se = (struct session*)arg;
+    assert(se);
 
-    if (rs->rtp_send_thread) {
-        ret = pthread_cancel(rs->rtp_send_thread);
+    if (se->rtp_send_thread) {
+        ret = pthread_cancel(se->rtp_send_thread);
         if (ret != 0)
             printf("%s: pthread_cancel for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
-        ret = pthread_join(rs->rtp_send_thread, &res);
+        ret = pthread_join(se->rtp_send_thread, &res);
         if (ret != 0)
             printf("%s: pthread_join for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        rs->rtp_send_thread = 0;
+        se->rtp_send_thread = 0;
     }
 
     if (res == PTHREAD_CANCELED)
@@ -100,13 +102,13 @@ static void set_seq_num(struct rtp_pkt *pkt, uint16_t seq_num)
     pkt->header = (pkt->header & ~RTP_SEQNUMB_MASK) | (uint32_t)seq_num;
 }
 
-extern uint32_t timeval_to_rtp_timestamp(struct timeval *tv, rtsp_session *rs);
-static void set_timestamp(struct rtp_pkt *pkt, rtsp_session *rs)
+extern uint32_t timeval_to_rtp_timestamp(struct timeval *tv, struct session *se);
+static void set_timestamp(struct rtp_pkt *pkt, struct session *se)
 {
     struct timeval tv;
 
     gettimeofday(&tv, NULL);
-    pkt->timestamp = htonl(timeval_to_rtp_timestamp(&tv, rs));
+    pkt->timestamp = htonl(timeval_to_rtp_timestamp(&tv, se));
 }
 
 static char slab[65536];
@@ -128,7 +130,7 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
 
 static void* send_dispatch(void *arg)
 {
-    rtsp_session *rs = (rtsp_session*)arg;
+    struct session *se = (struct session*)arg;
     struct rtp_pkt pkt;
     struct msghdr h;
     uv_buf_t uv_buf;
@@ -137,7 +139,7 @@ static void* send_dispatch(void *arg)
     int retry = 0, len = 0, n = 0;
     unsigned char data[PACKET_BUFFER_SIZE];
 
-    if (!rs)
+    if (!se)
         return NULL;
 
     memset(&pkt, 0, sizeof(pkt));
@@ -149,12 +151,12 @@ static void* send_dispatch(void *arg)
     clear_marker(&pkt);
     set_payload_type(&pkt, 96);
     pkt.header = htonl(pkt.header);
-    pkt.ssrc = htonl(rs->uri->ssrc);
+    pkt.ssrc = htonl(se->uri->ssrc);
 
     uv_buf.base = (char*)&pkt;
 
     memset(&h, 0, sizeof(struct msghdr));
-    h.msg_name = &rs->clit_rtp_addr;
+    h.msg_name = &se->clit_rtp_addr;
     h.msg_namelen = sizeof(struct sockaddr_in);
     h.msg_iov = (struct iovec*)&uv_buf;
     h.msg_iovlen = 1;
@@ -165,11 +167,11 @@ static void* send_dispatch(void *arg)
         pkt.header = ntohl(pkt.header);
         set_seq_num(&pkt, seq_num++);
         pkt.header = htonl(pkt.header);
-        set_timestamp(&pkt, rs);
+        set_timestamp(&pkt, se);
 
         memset(data, 0, PACKET_BUFFER_SIZE);
-        if (video_encoding(rs, data, &len) < 0) {
-            printf("%s: video encoding failed on uri: '%s', continue next frame\n", __func__, rs->uri->url);
+        if (sample_frame(se, data, &len) < 0) {
+            printf("%s: video encoding failed on uri: '%s', continue next frame\n", __func__, se->uri->url);
             continue;
         }
 
@@ -186,12 +188,12 @@ static void* send_dispatch(void *arg)
             }
             retry = 5;
             while (retry--) { // resend segment on failing
-                size = sendmsg(rs->rtp_handle.io_watcher.fd, &h, 0);
+                size = sendmsg(se->rtp_handle.io_watcher.fd, &h, 0);
                 if (size >= 0)
                     break;
             }
-            rs->packet_count++;
-            rs->octet_count += size;
+            se->packet_count++;
+            se->octet_count += size;
             if (n == len) {
                 pkt.header = ntohl(pkt.header);
                 clear_marker(&pkt);
@@ -207,39 +209,39 @@ static void timeout_cb(uv_timer_t *timer) {}
 
 void* rtp_dispatch(void *arg)
 {
-    rtsp_session *rs = (rtsp_session*)arg;
+    struct session *se = (struct session*)arg;
     uv_timer_t timeout;
     int ret;
 
-    if (encoder_init(rs) < 0)
+    if (encoder_init(se) < 0)
         return NULL;
 
-    pthread_cleanup_push(clean_up, rs);
+    pthread_cleanup_push(clean_up, se);
 
-    ret = uv_udp_recv_start(&rs->rtp_handle, alloc_cb, recv_cb);
+    ret = uv_udp_recv_start(&se->rtp_handle, alloc_cb, recv_cb);
     if (ret != 0) {
         printf("%s: starting RTP recive error: %s\n", __func__, uv_strerror(ret));
         goto out;
     }
 
-    if (pthread_create(&rs->rtp_send_thread, NULL, send_dispatch, rs) != 0) {
+    if (pthread_create(&se->rtp_send_thread, NULL, send_dispatch, se) != 0) {
         printf("%s: creating RTP send thread failed: %s\n", __func__, strerror(errno));
-        uv_udp_recv_stop(&rs->rtp_handle);
-        rs->rtp_send_thread = 0;
+        uv_udp_recv_stop(&se->rtp_handle);
+        se->rtp_send_thread = 0;
         goto out;
     }
 
-    ret = uv_timer_init(&rs->rtp_loop, &timeout);
+    ret = uv_timer_init(&se->rtp_loop, &timeout);
     assert(ret == 0);
     ret = uv_timer_start(&timeout, timeout_cb, 500, 500);
     assert(ret == 0);
-    uv_run(&rs->rtp_loop, UV_RUN_DEFAULT);
+    uv_run(&se->rtp_loop, UV_RUN_DEFAULT);
 
     pthread_cleanup_pop(1);
 
-    encoder_deinit(rs);
+    encoder_deinit(se);
 
 out:
-    uv_loop_close(&rs->rtp_loop);
+    uv_loop_close(&se->rtp_loop);
     return NULL;
 }

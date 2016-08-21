@@ -8,6 +8,6 @@ struct stream_arg {
 
 extern struct stream_arg g_show;
 
-extern void* cc_stream(void *arg);
+extern void *cc_stream(void *arg);
 
 #endif // CCSTREAM_H
