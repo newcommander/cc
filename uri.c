@@ -116,7 +116,6 @@ int make_sdp_string(struct Uri *uri)
     strncat(uri->sdp_str, media_attr3, strlen(media_attr3));
     strncat(uri->sdp_str, media_attr4, strlen(media_attr4));
     strncat(uri->sdp_str, media_attr5, strlen(media_attr5));
-    printf("%s\n", uri->sdp_str);
 
     return 0;
 }
