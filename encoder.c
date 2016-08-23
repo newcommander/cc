@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "session.h"
+#include "uri.h"
 
 static int encode_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *out_buf, int *out_buf_len)
 {
@@ -133,6 +134,7 @@ int encoder_init(struct session *se)
     if (codec_id == AV_CODEC_ID_H264) {
         av_opt_set(se->cc->priv_data, "preset", "slow", 0);
         av_opt_set(se->cc->priv_data, "allow_skip_frames", "enable", 0);
+        se->cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     } else if (codec_id == AV_CODEC_ID_MPEG4) {
         se->cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
@@ -199,4 +201,72 @@ void encoder_deinit(struct session *se)
         av_frame_free(&se->frame);
         se->frame = NULL;
     }
+}
+
+static char *data_to_hex(char *buff, const uint8_t *src, int s, int lowercase)
+{
+    int i;
+    static const char hex_table_uc[16] = { '0', '1', '2', '3',
+                                           '4', '5', '6', '7',
+                                           '8', '9', 'A', 'B',
+                                           'C', 'D', 'E', 'F' };
+    static const char hex_table_lc[16] = { '0', '1', '2', '3',
+                                           '4', '5', '6', '7',
+                                           '8', '9', 'a', 'b',
+                                           'c', 'd', 'e', 'f' };
+    const char *hex_table = lowercase ? hex_table_lc : hex_table_uc;
+
+    for (i = 0; i < s; i++) {
+        buff[i * 2]     = hex_table[src[i] >> 4];
+        buff[i * 2 + 1] = hex_table[src[i] & 0xF];
+    }
+    return buff;
+}
+
+static int get_mpeg4_config(struct Uri *uri, char *buf, int size)
+{
+    struct session se;
+
+    memset(&se, 0, sizeof(se));
+    snprintf(se.encoder_name, 6, "mpeg4");
+    se.uri = uri;
+    // open and then close codec, we got sdp string
+    if (encoder_init(&se) < 0) {
+        printf("%s: Cannot init encoder\n", __func__);
+        return -1;
+    }
+    if ((size - strlen(buf)) < 7 + se.cc->extradata_size * 2 + 2 + 1) {
+        printf("%s: The buffer for media config is too small\n", __func__);
+        return -1;
+    }
+    strncat(buf, "config=", 7);
+    data_to_hex(buf + strlen(buf), se.cc->extradata, se.cc->extradata_size, 0);
+    strncat(buf, "\r\n", 2);
+    encoder_deinit(&se);
+
+    return 0;
+}
+
+static int get_h264_config(struct Uri *uri, char *buf, int size)
+{
+    return 0;
+}
+
+int get_media_config(struct Uri *uri, char *encoder_name, char *buf, int size)
+{
+    if (!memcmp(encoder_name, "mpeg4", 5)) {
+        if (get_mpeg4_config(uri, buf, size) < 0)
+            return -1;
+    } else if (!memcmp(encoder_name, "h264", 4)) {
+        if (get_h264_config(uri, buf, size) < 0)
+            return -1;
+    }
+    else {
+        if ((size - strlen(buf)) >= 3)
+            strncat(buf, "\r\n", 2);
+        else
+            return -1;
+    }
+
+    return 0;
 }

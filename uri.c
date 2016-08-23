@@ -16,29 +16,9 @@ extern struct uri_entry entrys[];
 extern char active_addr[128];
 extern char base_url[1024];
 
-char *data_to_hex(char *buff, const uint8_t *src, int s, int lowercase)
-{
-    int i;
-    static const char hex_table_uc[16] = { '0', '1', '2', '3',
-                                           '4', '5', '6', '7',
-                                           '8', '9', 'A', 'B',
-                                           'C', 'D', 'E', 'F' };
-    static const char hex_table_lc[16] = { '0', '1', '2', '3',
-                                           '4', '5', '6', '7',
-                                           '8', '9', 'a', 'b',
-                                           'c', 'd', 'e', 'f' };
-    const char *hex_table = lowercase ? hex_table_lc : hex_table_uc;
-
-    for (i = 0; i < s; i++) {
-        buff[i * 2]     = hex_table[src[i] >> 4];
-        buff[i * 2 + 1] = hex_table[src[i] & 0xF];
-    }
-    return buff;
-}
-
+#define CONFIG_BUF_SIZE 2048
 int make_sdp_string(struct Uri *uri)
 {
-    struct session se;
     struct timeval tv;
 
     char tmp[1024];
@@ -51,14 +31,14 @@ int make_sdp_string(struct Uri *uri)
     char session_attr[128];
     char *media_desc = "m=video 0 RTP/AVP 96\r\n";
     char *bandwidth_info = "b=AS:500\r\n";
-    char *media_attr1 = "a=rtpmap:96 MP4V-ES/90000\r\n";
-//    char *media_attr = "a=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z2QAH6zZQEAEmhAAAAMAEAAAAwMo8YMZYA==,aOvjyyLA\r\n";
-    char media_attr2[512];
+//    char *media_attr1 = "a=rtpmap:96 MP4V-ES/90000\r\n";
+    //char *media_attr1 = "a=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z2QAH6zZQEAEmhAAAAMAEAAAAwMo8YMZYA==,aOvjyyLA\r\n";
+    char *media_attr1 = "a=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z2QAH6zZQEAEmhAAAAMAEAAAAwMo8YMZYA==,aOvjyyLA\r\n";
+    char media_attr2[CONFIG_BUF_SIZE];
     char media_attr3[32];
     char media_attr4[32];
     char media_attr5[128];
 
-    memset(&se, 0, sizeof(se));
     memset(origin, 0, sizeof(origin));
     memset(connection, 0, sizeof(connection));
     memset(session_attr, 0, sizeof(session_attr));
@@ -75,6 +55,12 @@ int make_sdp_string(struct Uri *uri)
     memcpy(tmp, uri->url, strlen(uri->url) > 1023 ? 1023 : strlen(uri->url));
     snprintf(session_attr + strlen(session_attr), sizeof(session_attr) - strlen(session_attr), "a=control:%s\r\n", dirname(tmp));
 
+    strncat(media_attr2, "a=fmtp:96 ", 10);
+    if (get_media_config(uri, "mpeg4", media_attr2, CONFIG_BUF_SIZE) < 0) {
+        printf("%s: Getting media[%s] config info failed\n", __func__, uri->url);
+        return -1;
+    }
+    /*
     //TODO: what about h264 codec ??
     snprintf(se.encoder_name, 6, "mpeg4");
     se.uri = uri;
@@ -91,6 +77,7 @@ int make_sdp_string(struct Uri *uri)
     data_to_hex(media_attr2 + strlen(media_attr2), se.cc->extradata, se.cc->extradata_size, 0);
     strncat(media_attr2, "\r\n", 2);
     encoder_deinit(&se);
+    */
 
     snprintf(media_attr3, sizeof(media_attr3), "a=framerate:%d\r\n", uri->framerate);
     snprintf(media_attr4, sizeof(media_attr4), "a=framesize:96 %d-%d\r\n", uri->width, uri->height);
