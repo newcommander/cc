@@ -3,6 +3,7 @@
 
 #include <libavutil/opt.h>
 #include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_struct.h>
@@ -44,7 +45,7 @@ struct session {
     uint32_t packet_count;
     uint32_t octet_count;
     int rtcp_interval;  // ms
-    char encoder_name[128];
+    char encoder_name[32];
     AVCodecContext *cc;
     AVFrame *frame;
     int pts;

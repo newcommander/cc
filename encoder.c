@@ -223,50 +223,51 @@ static char *data_to_hex(char *buff, const uint8_t *src, int s, int lowercase)
     return buff;
 }
 
-static int get_mpeg4_config(struct Uri *uri, char *buf, int size)
+int get_media_config(struct Uri *uri, char *encoder_name, char *buf, int size)
 {
     struct session se;
 
     memset(&se, 0, sizeof(se));
-    snprintf(se.encoder_name, 6, "mpeg4");
+    snprintf(se.encoder_name, sizeof(se.encoder_name), encoder_name);
     se.uri = uri;
     // open and then close codec, we got sdp string
     if (encoder_init(&se) < 0) {
         printf("%s: Cannot init encoder\n", __func__);
         return -1;
     }
-    if ((size - strlen(buf)) < 7 + se.cc->extradata_size * 2 + 2 + 1) {
-        printf("%s: The buffer for media config is too small\n", __func__);
+    if (!se.cc) {
+        printf("%s: Cannot get codec context\n", __func__);
+        encoder_deinit(&se);
         return -1;
     }
-    strncat(buf, "config=", 7);
-    data_to_hex(buf + strlen(buf), se.cc->extradata, se.cc->extradata_size, 0);
-    strncat(buf, "\r\n", 2);
+    if (!memcmp(se.encoder_name, "mpeg4", 5)) {
+        if ((size - strlen(buf)) < 7 + se.cc->extradata_size * 2 + 2 + 1) {
+            printf("%s: The buffer for media config is too small\n", __func__);
+            encoder_deinit(&se);
+            return -1;
+        }
+        strncat(buf, "; config=", 9);
+        data_to_hex(buf + strlen(buf), se.cc->extradata, se.cc->extradata_size, 0);
+    } else if (!memcmp(se.encoder_name, "h264", 4)) {
+        char *config = NULL;
+        config = extradata2psets(se.cc);
+        if (config) {
+            if (strlen(config) <= size) {
+                memcpy(buf, config, strlen(config));
+                av_free(config);
+            } else {
+                printf("%s: Codec[h264]'s config info too long\n", __func__);
+                av_free(config);
+                encoder_deinit(&se);
+                return -1;
+            }
+        } else {
+            printf("%s: Cannot get config of codec[h264]\n", __func__);
+            encoder_deinit(&se);
+            return -1;
+        }
+    }
     encoder_deinit(&se);
-
-    return 0;
-}
-
-static int get_h264_config(struct Uri *uri, char *buf, int size)
-{
-    return 0;
-}
-
-int get_media_config(struct Uri *uri, char *encoder_name, char *buf, int size)
-{
-    if (!memcmp(encoder_name, "mpeg4", 5)) {
-        if (get_mpeg4_config(uri, buf, size) < 0)
-            return -1;
-    } else if (!memcmp(encoder_name, "h264", 4)) {
-        if (get_h264_config(uri, buf, size) < 0)
-            return -1;
-    }
-    else {
-        if ((size - strlen(buf)) >= 3)
-            strncat(buf, "\r\n", 2);
-        else
-            return -1;
-    }
 
     return 0;
 }
