@@ -58,24 +58,6 @@ int make_sdp_string(struct Uri *uri)
     strncat(media_attr2, "a=fmtp:96 packetization-mode=1", 30);
     get_media_config(uri, "h264", media_attr2 + 30, CONFIG_BUF_SIZE - 31);
     strncat(media_attr2, "\r\n", 2);
-    /*
-    //TODO: what about h264 codec ??
-    snprintf(se.encoder_name, 6, "mpeg4");
-    se.uri = uri;
-    // open and then close codec, we got sdp string
-    if (encoder_init(&se) < 0) {
-        printf("%s: Cannot get sdp string\n", __func__);
-        return -1;
-    }
-    if (sizeof(media_attr2) < se.cc->extradata_size * 2 + 1 + 17) {
-        printf("%s: media attribute buffer for config_info is too small\n", __func__);
-        return -1;
-    }
-    strncat(media_attr2, "a=fmtp:96 config=", 17);
-    data_to_hex(media_attr2 + strlen(media_attr2), se.cc->extradata, se.cc->extradata_size, 0);
-    strncat(media_attr2, "\r\n", 2);
-    encoder_deinit(&se);
-    */
 
     snprintf(media_attr3, sizeof(media_attr3), "a=framerate:%d\r\n", uri->framerate);
     snprintf(media_attr4, sizeof(media_attr4), "a=framesize:96 %d-%d\r\n", uri->width, uri->height);
