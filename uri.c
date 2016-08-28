@@ -86,7 +86,7 @@ int make_sdp_string(struct Uri *uri)
     uri->sdp_str = (char*)calloc(strlen(version) + strlen(origin) + strlen(session_name) +
             strlen(session_info) + strlen(connection) + strlen(time) + strlen(session_attr) +
             strlen(media_desc) + strlen(bandwidth_info) + strlen(media_attr1) +
-            strlen(media_attr2) + strlen(media_attr3) + strlen(media_attr4) + strlen(media_attr5), 1);
+            strlen(media_attr2) + strlen(media_attr3) + strlen(media_attr4) + strlen(media_attr5) + 1, 1);
     strncat(uri->sdp_str, version, strlen(version));
     strncat(uri->sdp_str, origin, strlen(origin));
     strncat(uri->sdp_str, session_name, strlen(session_name));

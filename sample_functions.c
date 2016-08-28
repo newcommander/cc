@@ -87,8 +87,8 @@ static int lala(void *_frame, int screen_w, int screen_h)
     /* Cb and Cr */
     for (y = 0; y < screen_h / 2; y++) {
         for (x = 0; x < screen_w / 2; x++) {
-            frame->data[1][y * frame->linesize[1] + x] = 0;
-            frame->data[2][y * frame->linesize[2] + x] = 0;
+            frame->data[1][y * frame->linesize[1] + x] = 128;
+            frame->data[2][y * frame->linesize[2] + x] = 128;
         }
     }
 

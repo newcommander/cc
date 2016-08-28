@@ -12,7 +12,7 @@ LINK=-L$(LIBEVENT)/lib \
 
 CC=gcc
 CFLAGS=-g -Wall -fPIC
-LFLAGS=-lavcodec -lswresample -lavutil -pthread \
+LFLAGS=-lavcodec -lavformat -lswresample -lavutil -pthread \
        -lz -lrt -lm -levent_core -luv -shared
 
 OBJ=uri.o session.o encoder.o sample_functions.o \

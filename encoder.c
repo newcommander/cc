@@ -94,7 +94,7 @@ int encoder_init(struct session *se)
         printf("%s: Invalid parameter\n", __func__);
         return -1;
     }
-    memset(errbuf, 0, 100);
+    memset(errbuf, 0, sizeof(errbuf));
 
     if (!strncmp(se->encoder_name, "mpeg4", 5))
         codec_id = AV_CODEC_ID_MPEG4;
@@ -250,7 +250,7 @@ int get_media_config(struct Uri *uri, char *encoder_name, char *buf, int size)
         data_to_hex(buf + strlen(buf), se.cc->extradata, se.cc->extradata_size, 0);
     } else if (!memcmp(se.encoder_name, "h264", 4)) {
         char *config = NULL;
-        config = extradata2psets(se.cc);
+        config = av_get_sdp_config(se.cc);
         if (config) {
             if (strlen(config) <= size) {
                 memcpy(buf, config, strlen(config));

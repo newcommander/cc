@@ -149,7 +149,7 @@ static int make_response_date(char **time_str)
     struct tm tt;
     time_t t;
 
-    *time_str = (char*)calloc(40, 1);
+    *time_str = (char*)calloc(64, 1);
     if (!(*time_str)) {
         printf("%s: calloc failed\n", __func__);
         return -1;
