@@ -6,6 +6,11 @@
 #include "encoder.h"
 #include "rtsp.h"
 
+#define CC_IDLE    0
+#define CC_IN_INIT 1
+#define CC_IN_FREE 2
+static int ccstream_status;
+
 char active_addr[128];
 const int PORT = 554;
 char base_url[1024];
@@ -100,17 +105,28 @@ static void event_cb(struct bufferevent *bev, short events, void *user_data)
         return;
     }
 
+    bufferevent_flush(bev, EV_WRITE, BEV_FLUSH);
     se = (struct session*)bev->wm_read.private_data;
     if (se)
         session_destroy(se);
+	else
+        bufferevent_free(bev);
 }
 
 static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data)
 {
-    struct event_base *base = user_data;
-    struct bufferevent *bev;
+    struct event_base *base = (struct event_base*)user_data;
+    struct bufferevent *bev = NULL;
 
-    bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
+	if (ccstream_status != CC_IDLE)
+		return;
+
+	if (!base) {
+		printf("%s: Invalid parameter\n", __func__);
+		return;
+	}
+
+	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
     if (!bev) {
         printf("%s: Error constructing bufferevent!", __func__);
         event_base_loopbreak(base);
@@ -125,17 +141,25 @@ static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, str
 
 static void signal_cb(evutil_socket_t sig, short events, void *user_data)
 {
-    struct event_base *base = user_data;
-    struct timeval delay = { 1, 0 };
+    struct event_base *base = (struct event_base*)user_data;
+    struct timeval delay = { 0, 500000 };
     struct list_head *list_p = NULL;
     struct session *se = NULL;
 
-    for (list_p = session_list.next; list_p != &session_list; ) {
+	if (!base) {
+		printf("%s: Invalid parameter\n", __func__);
+		return;
+	}
+
+	ccstream_status = CC_IN_FREE;
+
+	for (list_p = session_list.next; list_p != &session_list; ) {
         se = list_entry(list_p, struct session, list);
         list_p = list_p->next;
+        bufferevent_flush(se->bev, EV_WRITE, BEV_FLUSH);
         session_destroy(se);
     }
-    printf("%s: Caught an interrupt signal; exiting cleanly in 1 second.\n", __func__);
+    printf("%s: Caught an interrupt signal; exiting cleanly in 0.5 second.\n", __func__);
     event_base_loopexit(base, &delay);
 }
 
@@ -155,7 +179,7 @@ static int get_active_address(char *nic_name, char *buf, int len)
         nic_name = "eth0";
     }
 
-    if (getifaddrs(&iflist)) {
+    if (getifaddrs(&iflist) < 0) {
         printf("%s: getting NIC[%s] addresses failed: %s\n", __func__, nic_name, strerror(errno));
         return -1;
     }
@@ -188,12 +212,14 @@ void *cc_stream(void *arg)
     struct sockaddr_in sin;
     char *nic_name = (char*)arg;
 
+	ccstream_status = CC_IN_INIT;
+
+	memset(active_addr, 0, sizeof(active_addr));
+    if (get_active_address(nic_name, active_addr, sizeof(active_addr)) < 0)
+        return NULL;
+
     INIT_LIST_HEAD(&session_list);
     register_encoders();
-
-    memset(active_addr, 0, sizeof(active_addr));
-    if (get_active_address(nic_name, active_addr, sizeof(active_addr)) != 0)
-        return NULL;
 
     memset(base_url, 0, sizeof(base_url));
     strncat(base_url, "rtsp://", 7);
@@ -224,7 +250,11 @@ void *cc_stream(void *arg)
         return NULL;
     }
 
-    event_base_dispatch(base);
+	ccstream_status = CC_IDLE;
+
+	event_base_dispatch(base);
+
+	ccstream_status = CC_IN_FREE;
 
     uris_deinit();
 

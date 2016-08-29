@@ -56,7 +56,7 @@ int make_sdp_string(struct Uri *uri)
     snprintf(session_attr + strlen(session_attr), sizeof(session_attr) - strlen(session_attr), "a=control:%s\r\n", dirname(tmp));
 
     strncat(media_attr2, "a=fmtp:96 packetization-mode=1", 30);
-    get_media_config(uri, "h264", media_attr2 + 30, CONFIG_BUF_SIZE - 31);
+    get_media_config(uri, "h264", media_attr2 + 30, CONFIG_BUF_SIZE - 33);
     strncat(media_attr2, "\r\n", 2);
 
     snprintf(media_attr3, sizeof(media_attr3), "a=framerate:%d\r\n", uri->framerate);

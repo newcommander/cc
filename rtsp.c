@@ -506,9 +506,6 @@ static int make_response_for_teardown(struct rtsp_request *rr, char **response)
     if (!se)
         return 454;
 
-    //TODO: not destroy here
-    session_destroy(se);
-
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto failed;

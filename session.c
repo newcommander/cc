@@ -61,6 +61,7 @@ void session_destroy(struct session *se)
             break;
     }
 
+	se->bev->wm_read.private_data = NULL;
     bufferevent_free(se->bev);
 
     if (se->cc) {

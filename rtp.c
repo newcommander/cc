@@ -169,7 +169,7 @@ static void* send_dispatch(void *arg)
         pkt.header = htonl(pkt.header);
         set_timestamp(&pkt, se);
 
-        memset(data, 0, PACKET_BUFFER_SIZE);
+//        memset(data, 0, PACKET_BUFFER_SIZE);
         if (sample_frame(se, data, &len) < 0) {
             printf("%s: video encoding failed on uri: '%s', continue next frame\n", __func__, se->uri->url);
             continue;

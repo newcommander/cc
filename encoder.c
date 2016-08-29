@@ -9,7 +9,7 @@
 static int encode_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *out_buf, int *out_buf_len)
 {
     int ret = 0, got_output = 0;
-    char errbuf[100];
+    char errbuf[1024];
     AVPacket pkt;
 
     if (!cc || !frame || !out_buf || !out_buf_len) {
@@ -19,8 +19,8 @@ static int encode_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *out_b
 
     memset(errbuf, 0, sizeof(errbuf));
     av_init_packet(&pkt);
-    pkt.data = NULL;
-    pkt.size = 0;
+    pkt.data = out_buf;
+    pkt.size = PACKET_BUFFER_SIZE;
 
     /* encode the image */
     ret = avcodec_encode_video2(cc, &pkt, frame, &got_output);
@@ -43,7 +43,7 @@ static int encode_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *out_b
             printf("%s: Too large packet, drop it\n", __func__);
             return -1;
         }
-        memcpy(out_buf, pkt.data, pkt.size);
+        //memcpy(out_buf, pkt.data, pkt.size);
         *out_buf_len = pkt.size;
         av_packet_unref(&pkt);
     } else {
@@ -88,7 +88,7 @@ int encoder_init(struct session *se)
     AVCodec *codec = NULL;
     int codec_id;
     int ret = 0;
-    char errbuf[100];
+    char errbuf[1024];
 
     if (!se || !se->uri || !strlen(se->encoder_name)) {
         printf("%s: Invalid parameter\n", __func__);
@@ -131,12 +131,13 @@ int encoder_init(struct session *se)
     se->cc->max_b_frames = 1;
     se->cc->pix_fmt = AV_PIX_FMT_YUV420P;
 
+    se->cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
     if (codec_id == AV_CODEC_ID_H264) {
         av_opt_set(se->cc->priv_data, "preset", "slow", 0);
         av_opt_set(se->cc->priv_data, "allow_skip_frames", "enable", 0);
-        se->cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     } else if (codec_id == AV_CODEC_ID_MPEG4) {
-        se->cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        ;
     }
 
     /* open it */
@@ -241,7 +242,7 @@ int get_media_config(struct Uri *uri, char *encoder_name, char *buf, int size)
         return -1;
     }
     if (!memcmp(se.encoder_name, "mpeg4", 5)) {
-        if ((size - strlen(buf)) < 7 + se.cc->extradata_size * 2 + 2 + 1) {
+        if (size < 9 + se.cc->extradata_size * 2 + 1) {
             printf("%s: The buffer for media config is too small\n", __func__);
             encoder_deinit(&se);
             return -1;
