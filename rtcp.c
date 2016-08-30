@@ -186,8 +186,10 @@ void* send_dispatch(void *arg)
     ssize_t size;
     int retry;
 
-    if (!se)
+    if (!se) {
+        printf("%s: Invalid parameter\n", __func__);
         return NULL;
+    }
 
     memset(&pkt, 0, sizeof(pkt));
 
@@ -214,6 +216,8 @@ void* send_dispatch(void *arg)
         if (size >= 0)
             break;
     }
+    if (retry == 0)
+        printf("%s: send rtcp packet failed\n", __func__);
 
     if (pthread_create(&se->rtp_thread, NULL, rtp_dispatch, se) != 0) {
         printf("%s: creating rtp thread failed: %s\n", __func__, strerror(errno));

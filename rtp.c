@@ -139,8 +139,10 @@ static void* send_dispatch(void *arg)
     int retry = 0, len = 0, n = 0;
     unsigned char data[PACKET_BUFFER_SIZE];
 
-    if (!se)
+    if (!se) {
+        printf("%s: Invalid parameter\n", __func__);
         return NULL;
+    }
 
     memset(&pkt, 0, sizeof(pkt));
     set_version(&pkt);
