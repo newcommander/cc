@@ -55,6 +55,8 @@ int make_sdp_string(struct Uri *uri)
 
     strncat(media_attr2, "a=fmtp:96 packetization-mode=1", 30);
     get_media_config(uri, "h264", media_attr2 + 30, CONFIG_BUF_SIZE - 33);
+//    strncat(media_attr2, "a=fmtp:96 ", 10);
+//    get_media_config(uri, "mpeg4", media_attr2 + 10, CONFIG_BUF_SIZE - 13);
     strncat(media_attr2, "\r\n", 2);
 
     snprintf(media_attr3, sizeof(media_attr3), "a=framerate:%d\r\n", uri->framerate);

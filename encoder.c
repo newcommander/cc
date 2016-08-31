@@ -242,12 +242,12 @@ int get_media_config(struct Uri *uri, char *encoder_name, char *buf, int size)
         return -1;
     }
     if (!memcmp(se.encoder_name, "mpeg4", 5)) {
-        if (size < 9 + se.cc->extradata_size * 2 + 1) {
+        if (size < 7 + se.cc->extradata_size * 2 + 1) {
             printf("%s: The buffer for media config is too small\n", __func__);
             encoder_deinit(&se);
             return -1;
         }
-        strncat(buf, "; config=", 9);
+        strncat(buf, "config=", 7);
         data_to_hex(buf + strlen(buf), se.cc->extradata, se.cc->extradata_size, 0);
     } else if (!memcmp(se.encoder_name, "h264", 4)) {
         char *config = NULL;

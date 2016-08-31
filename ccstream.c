@@ -128,7 +128,7 @@ static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, str
 		return;
 	}
 
-	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
+    bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
     if (!bev) {
         printf("%s: Error constructing bufferevent!", __func__);
         event_base_loopbreak(base);
