@@ -11,7 +11,6 @@
 struct list_head uri_list;
 static pthread_mutex_t uri_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-extern int clean_uri_users(struct Uri *uri);
 extern struct uri_entry entrys[];
 extern char active_addr[128];
 extern char base_url[1024];
@@ -32,7 +31,6 @@ int make_sdp_string(struct Uri *uri)
     char *media_desc = "m=video 0 RTP/AVP 96\r\n";
     char *bandwidth_info = "b=AS:500\r\n";
     //char *media_attr1 = "a=rtpmap:96 MP4V-ES/90000\r\n";
-    //char *media_attr1 = "a=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z2QAH6zZQEAEmhAAAAMAEAAAAwMo8YMZYA==,aOvjyyLA\r\n";
     char *media_attr1 = "a=rtpmap:96 H264/90000\r\n";
     char media_attr2[CONFIG_BUF_SIZE];
     char media_attr3[32];
@@ -92,9 +90,14 @@ int add_uri(struct uri_entry *ue)
     struct Uri *uri = NULL;
     char url[1024];
 
-    if (!ue || !ue->title || !ue->track || ue->screen_w <= 0 || ue->screen_h <= 0 || !ue->sample_func) {
+	if (!ue) {
         printf("%s: Invalid parameter\n", __func__);
         return -1;
+	}
+    if (!ue->title || !ue->track || !ue->sample_func || ue->screen_w <= 0 || ue->screen_h <= 0) {
+		printf("%s: Invalid uri entry: track=%p,sample_func=%p,screen_width=%d,screen_height=%d\n",
+				__func__, ue->track, ue->sample_func, ue->screen_w, ue->screen_h);
+		return -1;
     }
 
     memset(url, 0, sizeof(url));
@@ -133,27 +136,14 @@ int add_uri(struct uri_entry *ue)
     make_sdp_string(uri);
     if (!uri->sdp_str) {
         printf("%s: Add uri[url:%s] failed\n", __func__, uri->url);
+		free(uri->url);
+		free(uri);
         return -1;
     }
 
     pthread_mutex_lock(&uri_mutex);
     list_add_tail(&uri->list, &uri_list);
     pthread_mutex_unlock(&uri_mutex);
-
-    return 0;
-}
-
-static int release_uri(struct Uri *uri) {
-    if (!uri) {
-        printf("%s: Invalid parameter\n", __func__);
-        return -1;
-    }
-
-    if (uri->url)
-        free(uri->url);
-    if (uri->sdp_str)
-        free(uri->sdp_str);
-    free(uri);
 
     return 0;
 }
@@ -180,7 +170,7 @@ int del_uri(struct Uri *uri, int force)
     } else if (force) {
         ret = clean_uri_users(uri);
         if (ret < 0) {
-            printf("%s: Cleaning uri(%s)'s users in force failed, uri could not be deleted\n", __func__, uri->url);
+            printf("%s: Cleaning uri(%s)'s users failed, uri could not be deleted\n", __func__, uri->url);
             return -1;
         }
         pthread_mutex_lock(&uri_mutex);
@@ -192,13 +182,19 @@ int del_uri(struct Uri *uri, int force)
         return -1;
     }
 
-    release_uri(uri);
+    if (uri->url)
+        free(uri->url);
+    if (uri->sdp_str)
+        free(uri->sdp_str);
+    free(uri);
+
     return 0;
 }
 
 struct Uri* find_uri(char *url)
 {
     struct Uri *uri = NULL, *p = NULL;
+
     if (!url) {
         printf("%s: Invalid parameter\n", __func__);
         return NULL;
@@ -214,30 +210,32 @@ struct Uri* find_uri(char *url)
     if (uri && uri->status == URI_IN_FREE)
         uri = NULL;
     pthread_mutex_unlock(&uri_mutex);
+
     return uri;
 }
 
 int ref_uri(struct Uri *uri, struct list_head *list)
 {
     int ret = 0;
+
     if (!uri || !list) {
         printf("%s: Invalid parameter\n", __func__);
         return -1;
     }
 
-    pthread_mutex_lock(&uri->ref_mutex);
     switch (uri->status) {
     case URI_IDLE:
         uri->status = URI_BUSY;
     case URI_BUSY:
+		pthread_mutex_lock(&uri->ref_mutex);
         uri->ref_counter++;
         list_add_tail(list, &uri->user_list);
+		pthread_mutex_unlock(&uri->ref_mutex);
         break;
     case URI_IN_FREE:
         ret = -1;
         break;
     }
-    pthread_mutex_unlock(&uri->ref_mutex);
 
     return ret;
 }
@@ -250,21 +248,22 @@ int unref_uri(struct Uri *uri, struct list_head *uri_user_list)
         return -1;
     }
 
-    pthread_mutex_lock(&uri->ref_mutex);
     switch (uri->status) {
     case URI_IDLE:
         break;
     case URI_BUSY:
-        list_del(uri_user_list);
-        if (!--uri->ref_counter)
+		pthread_mutex_lock(&uri->ref_mutex);
+		list_del(uri_user_list);
+		uri->ref_counter--;
+        if (uri->ref_counter == 0)
             uri->status = URI_IDLE;
+		pthread_mutex_unlock(&uri->ref_mutex);
         break;
     case URI_IN_FREE:
         // never here
         ret = -1;
         break;
     }
-    pthread_mutex_unlock(&uri->ref_mutex);
 
     return ret;
 }

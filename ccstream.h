@@ -10,4 +10,4 @@ extern struct stream_arg g_show;
 
 extern void *cc_stream(void *arg);
 
-#endif // CCSTREAM_H
+#endif /* CCSTREAM_H */

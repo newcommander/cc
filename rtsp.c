@@ -207,25 +207,6 @@ out:
     return ret;
 }
 
-int clean_uri_users(struct Uri *uri)
-{
-    struct list_head *list_p = NULL;
-    struct session *se = NULL;
-
-    if (!uri) {
-        printf("%s: Invalid parameter\n", __func__);
-        return -1;
-    }
-
-    for (list_p = uri->user_list.next; list_p != &uri->user_list; ) {
-        se = list_entry(list_p, struct session, uri_user_list);
-        list_p = list_p->next;
-        session_destroy(se);
-    }
-
-    return 0;
-}
-
 static struct session *find_session_by_id(char *session_id)
 {
     struct session *se = NULL, *p = NULL;

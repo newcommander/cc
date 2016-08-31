@@ -13,4 +13,4 @@
 
 #define PACKET_BUFFER_SIZE 1*1024*1024
 
-#endif
+#endif /* COMMON_H */

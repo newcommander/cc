@@ -43,4 +43,4 @@ extern void error_reply(int code, int cseq, char **response);
 extern int make_response(struct rtsp_request *rr, char **buf);
 extern void release_rtsp_request(struct rtsp_request *rr);
 
-#endif
+#endif /* RTSP_H */

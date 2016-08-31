@@ -56,6 +56,9 @@ struct session {
 extern struct list_head session_list;
 
 extern void session_destroy(struct session *se);
+extern int clean_uri_users(struct Uri *uri);
 extern struct session *session_create(char *url, struct bufferevent *bev,
         int client_rtp_port, int client_rtcp_port);
-#endif
+
+#endif /* SESSION_H */
+

@@ -107,10 +107,12 @@ static void event_cb(struct bufferevent *bev, short events, void *user_data)
 
     bufferevent_flush(bev, EV_WRITE, BEV_FLUSH);
     se = (struct session*)bev->wm_read.private_data;
+	printf("begin\n");
     if (se)
         session_destroy(se);
 	else
         bufferevent_free(bev);
+	printf("end\n");
 }
 
 static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data)

@@ -45,4 +45,4 @@ extern int unref_uri(struct Uri *uri, struct list_head *list);
 extern void uris_init();
 extern void uris_deinit();
 
-#endif
+#endif /* URI_H */

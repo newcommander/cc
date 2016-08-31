@@ -14,8 +14,10 @@ void session_destroy(struct session *se)
     void *res = NULL;
     int ret = 0, retry;
 
-    if (!se)
+    if (!se) {
+		printf("%s: Invalid parameter\n", __func__);
         return;
+	}
 
     switch(se->status) {
     case SESION_READY:
@@ -48,8 +50,10 @@ void session_destroy(struct session *se)
 
     retry = 10;
     while (retry--) {
-        if (uv_loop_close(&se->rtcp_loop) != 0)
+        if (uv_loop_close(&se->rtcp_loop) != 0) {
+			printf("loop\n");
             msleep(200);
+		}
         else
             break;
     }
@@ -78,6 +82,25 @@ void session_destroy(struct session *se)
     }
 
     free(se);
+}
+
+int clean_uri_users(struct Uri *uri)
+{
+    struct list_head *list_p = NULL;
+    struct session *se = NULL;
+
+    if (!uri) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+
+    for (list_p = uri->user_list.next; list_p != &uri->user_list; ) {
+        se = list_entry(list_p, struct session, uri_user_list);
+        list_p = list_p->next;
+        session_destroy(se);
+    }
+
+    return 0;
 }
 
 struct session *session_create(char *url, struct bufferevent *bev, int client_rtp_port, int client_rtcp_port)
@@ -115,7 +138,7 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
 //    }
 
 	clit_addr_in = (struct sockaddr_in*)&clit_addr;
-    memset(clit_ip, 0, 16);
+    memset(clit_ip, 0, sizeof(clit_ip));
     snprintf(clit_ip, addr_len < 16 ? addr_len : 16, "%s", inet_ntoa(clit_addr_in->sin_addr));
 
     se = (struct session*)calloc(1, sizeof(*se));
