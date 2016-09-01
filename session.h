@@ -45,7 +45,7 @@ struct session {
     uint32_t packet_count;
     uint32_t octet_count;
     int rtcp_interval;  // ms
-    char encoder_name[32];
+    char *encoder_name;
     AVCodecContext *cc;
     AVFrame *frame;
     int pts;

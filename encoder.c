@@ -19,8 +19,10 @@ static int encode_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *out_b
 
     memset(errbuf, 0, sizeof(errbuf));
     av_init_packet(&pkt);
-    pkt.data = out_buf;
-    pkt.size = PACKET_BUFFER_SIZE;
+    pkt.data = NULL;
+    pkt.size = 0;
+//    pkt.data = out_buf;
+//    pkt.size = PACKET_BUFFER_SIZE;
 
     /* encode the image */
     ret = avcodec_encode_video2(cc, &pkt, frame, &got_output);
@@ -43,7 +45,7 @@ static int encode_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *out_b
             printf("%s: Too large packet, drop it\n", __func__);
             return -1;
         }
-        //memcpy(out_buf, pkt.data, pkt.size);
+        memcpy(out_buf, pkt.data, pkt.size);
         *out_buf_len = pkt.size;
         av_packet_unref(&pkt);
     } else {
@@ -229,8 +231,8 @@ int get_media_config(struct Uri *uri, char *encoder_name, char *buf, int size)
     struct session se;
 
     memset(&se, 0, sizeof(se));
-    snprintf(se.encoder_name, sizeof(se.encoder_name), encoder_name);
-    se.uri = uri;
+	se.encoder_name = encoder_name;
+	se.uri = uri;
     // open and then close codec, we got sdp string
     if (encoder_init(&se) < 0) {
         printf("%s: Cannot init encoder\n", __func__);

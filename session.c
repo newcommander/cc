@@ -206,8 +206,6 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
         goto failed;
     }
 
-    //TODO: how to decied encoder_name ??
-    snprintf(se->encoder_name, 6, "h264");
     se->status = SESION_READY;
 
     pthread_mutex_lock(&session_list_mutex);

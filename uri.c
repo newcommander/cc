@@ -16,9 +16,10 @@ extern char active_addr[128];
 extern char base_url[1024];
 
 #define CONFIG_BUF_SIZE 2048
-int make_sdp_string(struct Uri *uri)
+int make_sdp_string(struct Uri *uri, char *encoder_name)
 {
     struct timeval tv;
+	char *sdp_str = NULL;
 
     char tmp[1024];
     char *version = "v=0\r\n";
@@ -30,12 +31,16 @@ int make_sdp_string(struct Uri *uri)
     char session_attr[128];
     char *media_desc = "m=video 0 RTP/AVP 96\r\n";
     char *bandwidth_info = "b=AS:500\r\n";
-    //char *media_attr1 = "a=rtpmap:96 MP4V-ES/90000\r\n";
-    char *media_attr1 = "a=rtpmap:96 H264/90000\r\n";
+    char *media_attr1 = NULL;
     char media_attr2[CONFIG_BUF_SIZE];
     char media_attr3[32];
     char media_attr4[32];
     char media_attr5[128];
+
+	if (!uri || !encoder_name) {
+		printf("%s: Invalid parameter\n", __func__);
+		return -1;
+	}
 
     memset(origin, 0, sizeof(origin));
     memset(connection, 0, sizeof(connection));
@@ -53,10 +58,18 @@ int make_sdp_string(struct Uri *uri)
     memcpy(tmp, uri->url, strlen(uri->url) > 1023 ? 1023 : strlen(uri->url));
     snprintf(session_attr + strlen(session_attr), sizeof(session_attr) - strlen(session_attr), "a=control:%s\r\n", dirname(tmp));
 
-    strncat(media_attr2, "a=fmtp:96 packetization-mode=1", 30);
-    get_media_config(uri, "h264", media_attr2 + 30, CONFIG_BUF_SIZE - 33);
-//    strncat(media_attr2, "a=fmtp:96 ", 10);
-//    get_media_config(uri, "mpeg4", media_attr2 + 10, CONFIG_BUF_SIZE - 13);
+    if (!strncmp(encoder_name, "mpeg4", 5)) {
+		media_attr1 = "a=rtpmap:96 MP4V-ES/90000\r\n";
+		strncat(media_attr2, "a=fmtp:96 ", 10);
+		get_media_config(uri, encoder_name, media_attr2 + 10, CONFIG_BUF_SIZE - 13);
+    } else if (!strncmp(encoder_name, "h264", 4)) {
+		media_attr1 = "a=rtpmap:96 H264/90000\r\n";
+		strncat(media_attr2, "a=fmtp:96 packetization-mode=1", 30);
+		get_media_config(uri, encoder_name, media_attr2 + 30, CONFIG_BUF_SIZE - 33);
+	} else {
+		printf("%s: Unknow encoder name: %s\n", __func__, encoder_name);
+		return -1;
+	}
     strncat(media_attr2, "\r\n", 2);
 
     snprintf(media_attr3, sizeof(media_attr3), "a=framerate:%d\r\n", uri->framerate);
@@ -65,24 +78,38 @@ int make_sdp_string(struct Uri *uri)
     memcpy(tmp, uri->url, strlen(uri->url) > 1023 ? 1023 : strlen(uri->url));
     snprintf(media_attr5, sizeof(media_attr5), "a=control:%s/%s\r\n", basename(tmp), uri->track);
 
-    uri->sdp_str = (char*)calloc(strlen(version) + strlen(origin) + strlen(session_name) +
+    sdp_str = (char*)calloc(strlen(version) + strlen(origin) + strlen(session_name) +
             strlen(session_info) + strlen(connection) + strlen(time) + strlen(session_attr) +
             strlen(media_desc) + strlen(bandwidth_info) + strlen(media_attr1) +
             strlen(media_attr2) + strlen(media_attr3) + strlen(media_attr4) + strlen(media_attr5) + 1, 1);
-    strncat(uri->sdp_str, version, strlen(version));
-    strncat(uri->sdp_str, origin, strlen(origin));
-    strncat(uri->sdp_str, session_name, strlen(session_name));
-    strncat(uri->sdp_str, session_info, strlen(session_info));
-    strncat(uri->sdp_str, connection, strlen(connection));
-    strncat(uri->sdp_str, time, strlen(time));
-    strncat(uri->sdp_str, session_attr, strlen(session_attr));
-    strncat(uri->sdp_str, media_desc, strlen(media_desc));
-    strncat(uri->sdp_str, bandwidth_info, strlen(bandwidth_info));
-    strncat(uri->sdp_str, media_attr1, strlen(media_attr1));
-    strncat(uri->sdp_str, media_attr2, strlen(media_attr2));
-    strncat(uri->sdp_str, media_attr3, strlen(media_attr3));
-    strncat(uri->sdp_str, media_attr4, strlen(media_attr4));
-    strncat(uri->sdp_str, media_attr5, strlen(media_attr5));
+	if (!sdp_str) {
+		printf("%s: calloc failed\n", __func__);
+		return -1;
+	}
+    strncat(sdp_str, version, strlen(version));
+    strncat(sdp_str, origin, strlen(origin));
+    strncat(sdp_str, session_name, strlen(session_name));
+    strncat(sdp_str, session_info, strlen(session_info));
+    strncat(sdp_str, connection, strlen(connection));
+    strncat(sdp_str, time, strlen(time));
+    strncat(sdp_str, session_attr, strlen(session_attr));
+    strncat(sdp_str, media_desc, strlen(media_desc));
+    strncat(sdp_str, bandwidth_info, strlen(bandwidth_info));
+    strncat(sdp_str, media_attr1, strlen(media_attr1));
+    strncat(sdp_str, media_attr2, strlen(media_attr2));
+    strncat(sdp_str, media_attr3, strlen(media_attr3));
+    strncat(sdp_str, media_attr4, strlen(media_attr4));
+    strncat(sdp_str, media_attr5, strlen(media_attr5));
+
+    if (!strncmp(encoder_name, "mpeg4", 5)) {
+		uri->sdp_str_mpeg4 = sdp_str;
+    } else if (!strncmp(encoder_name, "h264", 4)) {
+		uri->sdp_str_h264 = sdp_str;
+	} else {
+		printf("%s: Unknow error when making sdp string\n", __func__);
+		free(sdp_str);
+		return -1;
+	}
 
     return 0;
 }
@@ -135,13 +162,18 @@ int add_uri(struct uri_entry *ue)
     uri->framerate = ue->framerate;
     uri->track = ue->track;
     uri->sample_func = ue->sample_func;
-    make_sdp_string(uri);
-    if (!uri->sdp_str) {
-        printf("%s: Add uri[url:%s] failed\n", __func__, uri->url);
+	if (make_sdp_string(uri, "mpeg4") < 0) {
+		printf("%s: failed making mpeg4 sdp string\n", __func__);
 		free(uri->url);
 		free(uri);
-        return -1;
-    }
+		return -1;
+	}
+	if (make_sdp_string(uri, "h264") < 0) {
+		printf("%s: failed making h264 sdp string\n", __func__);
+		free(uri->url);
+		free(uri);
+		return -1;
+	}
 
     pthread_mutex_lock(&uri_mutex);
     list_add_tail(&uri->list, &uri_list);
@@ -186,8 +218,10 @@ int del_uri(struct Uri *uri, int force)
 
     if (uri->url)
         free(uri->url);
-    if (uri->sdp_str)
-        free(uri->sdp_str);
+    if (uri->sdp_str_mpeg4)
+        free(uri->sdp_str_mpeg4);
+	if (uri->sdp_str_h264)
+		free(uri->sdp_str_h264);
     free(uri);
 
     return 0;

@@ -248,9 +248,20 @@ static int make_entity_header(struct Uri *uri, char **buf, int sdp_len)
     return 0;
 }
 
+static char *get_encoder_name(char *device_name)
+{
+	if (!strncmp(device_name, "xiaomi2", 7))
+		return "mpeg4";
+	else if (!strncmp(device_name, "xiaomi5", 7))
+		return "h264";
+	else
+		return "h264";
+}
+
 static int make_response_for_describe(struct rtsp_request *rr, char **response)
 {
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL, *entity_header = NULL;
+	char *sdp_str = NULL, *encoder_name = NULL;
     int len = 0;
     struct Uri *uri = NULL;
 
@@ -272,6 +283,18 @@ static int make_response_for_describe(struct rtsp_request *rr, char **response)
         return 404;
     }
 
+	encoder_name = get_encoder_name("xiaomi2");
+	if (!strncmp(encoder_name, "mpeg4", 5))
+		sdp_str = uri->sdp_str_mpeg4;
+	else if (!strncmp(encoder_name, "h264", 4))
+		sdp_str = uri->sdp_str_h264;
+	else
+		goto out;
+	if (!sdp_str) {
+		printf("%s: no sdp string matched\n", __func__);
+		return 500;
+	}
+
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto out;
@@ -281,11 +304,11 @@ static int make_response_for_describe(struct rtsp_request *rr, char **response)
     make_response_date(&date_str);
     if (!cseq_str)
         goto out;
-    make_entity_header(uri, &entity_header, strlen(uri->sdp_str));
+    make_entity_header(uri, &entity_header, strlen(sdp_str));
     if (!entity_header)
         goto out;
 
-    len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(entity_header) + 2 + strlen(uri->sdp_str);
+    len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(entity_header) + 2 + strlen(sdp_str);
     *response = (char*)calloc(len + 1, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
@@ -296,7 +319,7 @@ static int make_response_for_describe(struct rtsp_request *rr, char **response)
     strncat(*response, date_str, strlen(date_str));
     strncat(*response, entity_header, strlen(entity_header));
     strncat(*response, "\r\n", 2);
-    strncat(*response, uri->sdp_str, strlen(uri->sdp_str));
+    strncat(*response, sdp_str, strlen(sdp_str));
 
     free(status_line);
     free(cseq_str);
@@ -374,6 +397,7 @@ static int make_response_for_setup(struct rtsp_request *rr, char **response)
     se = session_create(dirname(tmp), rr->bev, c_rtp_port, c_rtcp_port);
     if (!se)
         return 500;
+	se->encoder_name = get_encoder_name("xiaomi2");
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)

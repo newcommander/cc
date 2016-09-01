@@ -18,10 +18,11 @@ struct Uri {
     pthread_mutex_t ref_mutex;
     int ref_counter;
     uint32_t ssrc;
-    char *sdp_str;
+    char *sdp_str_mpeg4;
+    char *sdp_str_h264;
     char *url;
-	int width;
-	int height;
+    int width;
+    int height;
     int framerate;
     char *track;
     sample_function sample_func;
