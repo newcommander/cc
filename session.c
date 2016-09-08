@@ -44,16 +44,15 @@ void session_destroy(struct session *se)
         printf("%s: Could not destroy session on %s\n", __func__, se->uri->url);
         return;
     }
+
     pthread_mutex_lock(&session_list_mutex);
     list_del(&se->list);
     pthread_mutex_unlock(&session_list_mutex);
 
     retry = 10;
     while (retry--) {
-        if (uv_loop_close(&se->rtcp_loop) != 0) {
-			printf("loop\n");
+        if (uv_loop_close(&se->rtcp_loop) != 0)
             msleep(200);
-		}
         else
             break;
     }
@@ -65,7 +64,7 @@ void session_destroy(struct session *se)
             break;
     }
 
-	se->bev->wm_read.private_data = NULL;
+    se->bev->wm_read.private_data = NULL;
     bufferevent_free(se->bev);
 
     if (se->cc) {

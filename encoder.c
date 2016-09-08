@@ -129,13 +129,15 @@ int encoder_init(struct session *se)
      * then gop_size is ignored and the output of encoder
      * will always be I frame irrespective to gop_size
      */
+    se->cc->ticks_per_frame = 1;
     se->cc->gop_size = 10;
-    se->cc->max_b_frames = 1;
+    se->cc->max_b_frames = 0;
     se->cc->pix_fmt = AV_PIX_FMT_YUV420P;
 
     se->cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
     if (codec_id == AV_CODEC_ID_H264) {
+        se->cc->ticks_per_frame = 2;
         av_opt_set(se->cc->priv_data, "preset", "slow", 0);
         av_opt_set(se->cc->priv_data, "allow_skip_frames", "enable", 0);
     } else if (codec_id == AV_CODEC_ID_MPEG4) {

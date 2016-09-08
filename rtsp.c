@@ -283,6 +283,7 @@ static int make_response_for_describe(struct rtsp_request *rr, char **response)
         return 404;
     }
 
+    printf("agent: %s\n", rr->rh.user_agent);
 	encoder_name = get_encoder_name("xiaomi2");
 	if (!strncmp(encoder_name, "mpeg4", 5))
 		sdp_str = uri->sdp_str_mpeg4;
