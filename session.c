@@ -15,12 +15,12 @@ void session_destroy(struct session *se)
     int ret = 0, retry;
 
     if (!se) {
-		printf("%s: Invalid parameter\n", __func__);
+        printf("%s: Invalid parameter\n", __func__);
         return;
-	}
+    }
 
     switch(se->status) {
-    case SESION_READY:
+    case SESION_IDLE:
         unref_uri(se->uri, &se->uri_user_list);
         se->status = SESION_IN_FREE;
         break;
@@ -37,7 +37,7 @@ void session_destroy(struct session *se)
         se->status = SESION_IN_FREE;
         break;
     case SESION_IN_FREE:
-		break;
+        break;
     }
 
     if (se->status != SESION_IN_FREE) {
@@ -104,7 +104,7 @@ int clean_uri_users(struct Uri *uri)
 
 struct session *session_create(char *url, struct bufferevent *bev, int client_rtp_port, int client_rtcp_port)
 {
-	struct session *se = NULL;
+    struct session *se = NULL;
     struct Uri *uri = NULL;
     struct timeval tv;
     struct sockaddr clit_addr;
@@ -136,7 +136,7 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
 //        return NULL;
 //    }
 
-	clit_addr_in = (struct sockaddr_in*)&clit_addr;
+    clit_addr_in = (struct sockaddr_in*)&clit_addr;
     memset(clit_ip, 0, sizeof(clit_ip));
     snprintf(clit_ip, addr_len < 16 ? addr_len : 16, "%s", inet_ntoa(clit_addr_in->sin_addr));
 
@@ -182,7 +182,7 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
             continue;
         else if (ret)
             goto failed;
-		// FIXME: what if port for rtp is not in use but port for rtcp is in use ?? need unbind the former ??
+        // FIXME: what if port for rtp is not in use but port for rtcp is in use ?? need unbind the former ??
         uv_ip4_addr(active_addr, port++, &se->serv_rtcp_addr);
         ret = uv_udp_bind(&se->rtcp_handle, (struct sockaddr*)&se->serv_rtcp_addr, 0);
         if (ret == UV_EADDRINUSE)
@@ -196,7 +196,7 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
         break;
     }
 
-	gettimeofday(&tv, NULL);
+    gettimeofday(&tv, NULL);
     snprintf(se->session_id, 9, "%04x%04x", (unsigned int)tv.tv_usec, (unsigned int)rand());
 
     ret = ref_uri(se->uri, &se->uri_user_list);
@@ -205,7 +205,7 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
         goto failed;
     }
 
-    se->status = SESION_READY;
+    se->status = SESION_IDLE;
 
     pthread_mutex_lock(&session_list_mutex);
     list_add(&se->list, &session_list);

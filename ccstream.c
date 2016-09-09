@@ -9,7 +9,7 @@
 #define CC_IDLE    0
 #define CC_IN_INIT 1
 #define CC_IN_FREE 2
-static int ccstream_status;
+static int cc_status;
 
 char active_addr[128];
 const int PORT = 554;
@@ -109,7 +109,7 @@ static void event_cb(struct bufferevent *bev, short events, void *user_data)
     se = (struct session*)bev->wm_read.private_data;
     if (se)
         session_destroy(se);
-	else
+    else
         bufferevent_free(bev);
 }
 
@@ -118,13 +118,13 @@ static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, str
     struct event_base *base = (struct event_base*)user_data;
     struct bufferevent *bev = NULL;
 
-	if (ccstream_status != CC_IDLE)
-		return;
+    if (cc_status != CC_IDLE)
+        return;
 
-	if (!base) {
-		printf("%s: Invalid parameter\n", __func__);
-		return;
-	}
+    if (!base) {
+        printf("%s: Invalid parameter\n", __func__);
+        return;
+    }
 
     bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
     if (!bev) {
@@ -146,14 +146,14 @@ static void signal_cb(evutil_socket_t sig, short events, void *user_data)
     struct list_head *list_p = NULL;
     struct session *se = NULL;
 
-	if (!base) {
-		printf("%s: Invalid parameter\n", __func__);
-		return;
-	}
+    if (!base) {
+        printf("%s: Invalid parameter\n", __func__);
+        return;
+    }
 
-	ccstream_status = CC_IN_FREE;
+    cc_status = CC_IN_FREE;
 
-	for (list_p = session_list.next; list_p != &session_list; ) {
+    for (list_p = session_list.next; list_p != &session_list; ) {
         se = list_entry(list_p, struct session, list);
         list_p = list_p->next;
         bufferevent_flush(se->bev, EV_WRITE, BEV_FLUSH);
@@ -212,9 +212,9 @@ void *cc_stream(void *arg)
     struct sockaddr_in sin;
     char *nic_name = (char*)arg;
 
-	ccstream_status = CC_IN_INIT;
+    cc_status = CC_IN_INIT;
 
-	memset(active_addr, 0, sizeof(active_addr));
+    memset(active_addr, 0, sizeof(active_addr));
     if (get_active_address(nic_name, active_addr, sizeof(active_addr)) < 0)
         return NULL;
 
@@ -250,11 +250,11 @@ void *cc_stream(void *arg)
         return NULL;
     }
 
-	ccstream_status = CC_IDLE;
+    cc_status = CC_IDLE;
 
-	event_base_dispatch(base);
+    event_base_dispatch(base);
 
-	ccstream_status = CC_IN_FREE;
+    cc_status = CC_IN_FREE;
 
     uris_deinit();
 

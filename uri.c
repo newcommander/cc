@@ -19,7 +19,7 @@ extern char base_url[1024];
 int make_sdp_string(struct Uri *uri, char *encoder_name)
 {
     struct timeval tv;
-	char *sdp_str = NULL;
+    char *sdp_str = NULL;
 
     char tmp[1024];
     char *version = "v=0\r\n";
@@ -37,10 +37,10 @@ int make_sdp_string(struct Uri *uri, char *encoder_name)
     char media_attr4[32];
     char media_attr5[128];
 
-	if (!uri || !encoder_name) {
-		printf("%s: Invalid parameter\n", __func__);
-		return -1;
-	}
+    if (!uri || !encoder_name) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
 
     memset(origin, 0, sizeof(origin));
     memset(connection, 0, sizeof(connection));
@@ -59,17 +59,17 @@ int make_sdp_string(struct Uri *uri, char *encoder_name)
     snprintf(session_attr + strlen(session_attr), sizeof(session_attr) - strlen(session_attr), "a=control:%s\r\n", dirname(tmp));
 
     if (!strncmp(encoder_name, "mpeg4", 5)) {
-		media_attr1 = "a=rtpmap:96 MP4V-ES/90000\r\n";
-		strncat(media_attr2, "a=fmtp:96 ", 10);
-		get_media_config(uri, encoder_name, media_attr2 + 10, CONFIG_BUF_SIZE - 13);
+        media_attr1 = "a=rtpmap:96 MP4V-ES/90000\r\n";
+        strncat(media_attr2, "a=fmtp:96 ", 10);
+        get_media_config(uri, encoder_name, media_attr2 + 10, CONFIG_BUF_SIZE - 13);
     } else if (!strncmp(encoder_name, "h264", 4)) {
-		media_attr1 = "a=rtpmap:96 H264/90000\r\n";
-		strncat(media_attr2, "a=fmtp:96 packetization-mode=1", 30);
-		get_media_config(uri, encoder_name, media_attr2 + 30, CONFIG_BUF_SIZE - 33);
-	} else {
-		printf("%s: Unknow encoder name: %s\n", __func__, encoder_name);
-		return -1;
-	}
+        media_attr1 = "a=rtpmap:96 H264/90000\r\n";
+        strncat(media_attr2, "a=fmtp:96 packetization-mode=1", 30);
+        get_media_config(uri, encoder_name, media_attr2 + 30, CONFIG_BUF_SIZE - 33);
+    } else {
+        printf("%s: Unknow encoder name: %s\n", __func__, encoder_name);
+        return -1;
+    }
     strncat(media_attr2, "\r\n", 2);
 
     snprintf(media_attr3, sizeof(media_attr3), "a=framerate:%d\r\n", uri->framerate);
@@ -82,10 +82,10 @@ int make_sdp_string(struct Uri *uri, char *encoder_name)
             strlen(session_info) + strlen(connection) + strlen(time) + strlen(session_attr) +
             strlen(media_desc) + strlen(bandwidth_info) + strlen(media_attr1) +
             strlen(media_attr2) + strlen(media_attr3) + strlen(media_attr4) + strlen(media_attr5) + 1, 1);
-	if (!sdp_str) {
-		printf("%s: calloc failed\n", __func__);
-		return -1;
-	}
+    if (!sdp_str) {
+        printf("%s: calloc failed\n", __func__);
+        return -1;
+    }
     strncat(sdp_str, version, strlen(version));
     strncat(sdp_str, origin, strlen(origin));
     strncat(sdp_str, session_name, strlen(session_name));
@@ -102,14 +102,14 @@ int make_sdp_string(struct Uri *uri, char *encoder_name)
     strncat(sdp_str, media_attr5, strlen(media_attr5));
 
     if (!strncmp(encoder_name, "mpeg4", 5)) {
-		uri->sdp_str_mpeg4 = sdp_str;
+        uri->sdp_str_mpeg4 = sdp_str;
     } else if (!strncmp(encoder_name, "h264", 4)) {
-		uri->sdp_str_h264 = sdp_str;
-	} else {
-		printf("%s: Unknow error when making sdp string\n", __func__);
-		free(sdp_str);
-		return -1;
-	}
+        uri->sdp_str_h264 = sdp_str;
+    } else {
+        printf("%s: Unknow error when making sdp string\n", __func__);
+        free(sdp_str);
+        return -1;
+    }
 
     return 0;
 }
@@ -119,14 +119,14 @@ int add_uri(struct uri_entry *ue)
     struct Uri *uri = NULL;
     char url[1024];
 
-	if (!ue) {
+    if (!ue) {
         printf("%s: Invalid parameter\n", __func__);
         return -1;
-	}
+    }
     if (!ue->title || !ue->track || !ue->sample_func || ue->screen_w <= 0 || ue->screen_h <= 0) {
-		printf("%s: Invalid uri entry: track=%p,sample_func=%p,screen_width=%d,screen_height=%d\n",
-				__func__, ue->track, ue->sample_func, ue->screen_w, ue->screen_h);
-		return -1;
+        printf("%s: Invalid uri entry: track=%p,sample_func=%p,screen_width=%d,screen_height=%d\n",
+                __func__, ue->track, ue->sample_func, ue->screen_w, ue->screen_h);
+        return -1;
     }
 
     memset(url, 0, sizeof(url));
@@ -162,18 +162,18 @@ int add_uri(struct uri_entry *ue)
     uri->framerate = ue->framerate;
     uri->track = ue->track;
     uri->sample_func = ue->sample_func;
-	if (make_sdp_string(uri, "mpeg4") < 0) {
-		printf("%s: failed making mpeg4 sdp string\n", __func__);
-		free(uri->url);
-		free(uri);
-		return -1;
-	}
-	if (make_sdp_string(uri, "h264") < 0) {
-		printf("%s: failed making h264 sdp string\n", __func__);
-		free(uri->url);
-		free(uri);
-		return -1;
-	}
+    if (make_sdp_string(uri, "mpeg4") < 0) {
+        printf("%s: failed making mpeg4 sdp string\n", __func__);
+        free(uri->url);
+        free(uri);
+        return -1;
+    }
+    if (make_sdp_string(uri, "h264") < 0) {
+        printf("%s: failed making h264 sdp string\n", __func__);
+        free(uri->url);
+        free(uri);
+        return -1;
+    }
 
     pthread_mutex_lock(&uri_mutex);
     list_add_tail(&uri->list, &uri_list);
@@ -220,8 +220,8 @@ int del_uri(struct Uri *uri, int force)
         free(uri->url);
     if (uri->sdp_str_mpeg4)
         free(uri->sdp_str_mpeg4);
-	if (uri->sdp_str_h264)
-		free(uri->sdp_str_h264);
+    if (uri->sdp_str_h264)
+        free(uri->sdp_str_h264);
     free(uri);
 
     return 0;
@@ -263,10 +263,10 @@ int ref_uri(struct Uri *uri, struct list_head *list)
     case URI_IDLE:
         uri->status = URI_BUSY;
     case URI_BUSY:
-		pthread_mutex_lock(&uri->ref_mutex);
+        pthread_mutex_lock(&uri->ref_mutex);
         uri->ref_counter++;
         list_add_tail(list, &uri->user_list);
-		pthread_mutex_unlock(&uri->ref_mutex);
+        pthread_mutex_unlock(&uri->ref_mutex);
         break;
     case URI_IN_FREE:
         ret = -1;
@@ -288,12 +288,12 @@ int unref_uri(struct Uri *uri, struct list_head *uri_user_list)
     case URI_IDLE:
         break;
     case URI_BUSY:
-		pthread_mutex_lock(&uri->ref_mutex);
-		list_del(uri_user_list);
-		uri->ref_counter--;
+        pthread_mutex_lock(&uri->ref_mutex);
+        list_del(uri_user_list);
+        uri->ref_counter--;
         if (uri->ref_counter == 0)
             uri->status = URI_IDLE;
-		pthread_mutex_unlock(&uri->ref_mutex);
+        pthread_mutex_unlock(&uri->ref_mutex);
         break;
     case URI_IN_FREE:
         // never here

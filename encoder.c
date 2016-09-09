@@ -233,8 +233,8 @@ int get_media_config(struct Uri *uri, char *encoder_name, char *buf, int size)
     struct session se;
 
     memset(&se, 0, sizeof(se));
-	se.encoder_name = encoder_name;
-	se.uri = uri;
+    se.encoder_name = encoder_name;
+    se.uri = uri;
     // open and then close codec, we got sdp string
     if (encoder_init(&se) < 0) {
         printf("%s: Cannot init encoder\n", __func__);

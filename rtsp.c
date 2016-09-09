@@ -168,26 +168,27 @@ static int make_response_for_options(int cseq, char **response)
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
     int ret;
 
+    *response = NULL;
     make_status_line(&status_line, "200", NULL);
     if (!status_line) {
         ret = 500;
-        goto out;
+        goto failed;
     }
     make_response_cseq(&cseq_str, cseq);
     if (!cseq_str) {
         ret = 500;
-        goto out;
+        goto failed;
     }
     make_response_date(&date_str);
     if (!cseq_str) {
         ret = 500;
-        goto out;
+        goto failed;
     }
     *response = (char*)calloc(strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(public) + 13, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
         ret = 500;
-        goto out;
+        goto failed;
     }
     snprintf(*response, strlen(status_line) + 1, status_line);
     strncat(*response, cseq_str, strlen(cseq_str));
@@ -197,7 +198,7 @@ static int make_response_for_options(int cseq, char **response)
 
     ret = 0;
 
-out:
+failed:
     if (status_line)
         free(status_line);
     if (cseq_str)
@@ -248,32 +249,31 @@ static int make_entity_header(struct Uri *uri, char **buf, int sdp_len)
     return 0;
 }
 
-static char *get_encoder_name(char *device_name)
+static char *get_encoder_name(char *agent_name)
 {
-	if (!strncmp(device_name, "xiaomi2", 7))
-		return "mpeg4";
-	else if (!strncmp(device_name, "xiaomi5", 7))
-		return "h264";
-	else
-		return "h264";
+    if (!strncmp(agent_name, "xiaomi2", 7))
+        return "mpeg4";
+    else if (!strncmp(agent_name, "xiaomi5", 7))
+        return "h264";
+    else
+        return "h264";
 }
 
 static int make_response_for_describe(struct rtsp_request *rr, char **response)
 {
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL, *entity_header = NULL;
-	char *sdp_str = NULL, *encoder_name = NULL;
+    char *sdp_str = NULL, *encoder_name = NULL;
     int len = 0;
     struct Uri *uri = NULL;
 
+    *response = NULL;
     if (!response || !rr || !rr->rh.accept) {
         printf("%s: Invalid parameter\n", __func__);
-        *response = NULL;
         return 500;
     }
 
     if (!strstr(rr->rh.accept, "application/sdp")) {
         printf("%s: Only accept application/sdp, but client require %s\n", __func__, rr->rh.accept);
-        *response = NULL;
         return 406;
     }
 
@@ -284,36 +284,36 @@ static int make_response_for_describe(struct rtsp_request *rr, char **response)
     }
 
     printf("agent: %s\n", rr->rh.user_agent);
-	encoder_name = get_encoder_name("xiaomi2");
-	if (!strncmp(encoder_name, "mpeg4", 5))
-		sdp_str = uri->sdp_str_mpeg4;
-	else if (!strncmp(encoder_name, "h264", 4))
-		sdp_str = uri->sdp_str_h264;
-	else
-		goto out;
-	if (!sdp_str) {
-		printf("%s: no sdp string matched\n", __func__);
-		return 500;
-	}
+    encoder_name = get_encoder_name("xiaomi2");
+    if (!strncmp(encoder_name, "mpeg4", 5))
+        sdp_str = uri->sdp_str_mpeg4;
+    else if (!strncmp(encoder_name, "h264", 4))
+        sdp_str = uri->sdp_str_h264;
+    else
+        goto failed;
+    if (!sdp_str) {
+        printf("%s: no sdp string matched\n", __func__);
+        return 500;
+    }
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
-        goto out;
+        goto failed;
     make_response_cseq(&cseq_str, rr->rh.cseq);
     if (!cseq_str)
-        goto out;
+        goto failed;
     make_response_date(&date_str);
     if (!cseq_str)
-        goto out;
+        goto failed;
     make_entity_header(uri, &entity_header, strlen(sdp_str));
     if (!entity_header)
-        goto out;
+        goto failed;
 
     len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + strlen(entity_header) + 2 + strlen(sdp_str);
     *response = (char*)calloc(len + 1, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
-        goto out;
+        goto failed;
     }
     strncat(*response, status_line, strlen(status_line));
     strncat(*response, cseq_str, strlen(cseq_str));
@@ -328,7 +328,7 @@ static int make_response_for_describe(struct rtsp_request *rr, char **response)
     free(entity_header);
     return 0;
 
-out:
+failed:
     if (status_line)
         free(status_line);
     if (cseq_str)
@@ -350,6 +350,7 @@ static int make_response_for_setup(struct rtsp_request *rr, char **response)
     int c_rtp_port = 0, c_rtcp_port = 0;
     int len;
 
+    *response = NULL;
     if (!rr || !rr->rh.transport) {
         printf("%s: Could not find request header 'Transport'\n", __func__);
         return 400;
@@ -393,13 +394,6 @@ static int make_response_for_setup(struct rtsp_request *rr, char **response)
         return 400;
     }
 
-    memset(tmp, 0, sizeof(tmp));
-    memcpy(tmp, rr->url, strlen(rr->url));
-    se = session_create(dirname(tmp), rr->bev, c_rtp_port, c_rtcp_port);
-    if (!se)
-        return 500;
-	se->encoder_name = get_encoder_name("xiaomi2");
-
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto failed;
@@ -416,6 +410,14 @@ static int make_response_for_setup(struct rtsp_request *rr, char **response)
         printf("%s: calloc failed\n", __func__);
         goto failed;
     }
+
+    memset(tmp, 0, sizeof(tmp));
+    memcpy(tmp, rr->url, strlen(rr->url));
+    se = session_create(dirname(tmp), rr->bev, c_rtp_port, c_rtcp_port);
+    if (!se)
+        goto failed;
+    se->encoder_name = get_encoder_name("xiaomi2");
+
     strncat(*response, status_line, strlen(status_line));
     strncat(*response, cseq_str, strlen(cseq_str));
     strncat(*response, date_str, strlen(date_str));
@@ -447,9 +449,12 @@ static int make_response_for_play(struct rtsp_request *rr, char **response)
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
     int len;
 
+    *response = NULL;
     se = find_session_by_id(rr->rh.session_id);
-    if (!se)
+    if (!se) {
+        printf("%s: Cannot find session[id:%s]\n", __func__, rr->rh.session_id);
         return 454;
+    }
 
     if (se->status == SESION_PLAYING) {
         printf("%s: Session already in PLAYING status\n", __func__);
@@ -505,9 +510,12 @@ static int make_response_for_teardown(struct rtsp_request *rr, char **response)
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
     int len;
 
+    *response = NULL;
     se = find_session_by_id(rr->rh.session_id);
-    if (!se)
+    if (!se) {
+        printf("%s: Cannot find session[id:%s]\n", __func__, rr->rh.session_id);
         return 454;
+    }
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)

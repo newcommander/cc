@@ -19,7 +19,7 @@
 #include "uri.h"
 
 struct session {
-#define SESION_READY 0
+#define SESION_IDLE 0
 #define SESION_PLAYING 1
 #define SESION_IN_FREE 2
     int status;
