@@ -17,8 +17,13 @@
 
 #include "list.h"
 #include "uri.h"
+#include "rtcp.h"
+#include "rtp.h"
+
+#define SESSION_RECV_BUF_SIZE 1024
 
 struct session {
+    char session_id[32];
 #define SESION_IDLE 0
 #define SESION_PLAYING 1
 #define SESION_IN_FREE 2
@@ -26,7 +31,12 @@ struct session {
     struct bufferevent *bev;
     struct list_head list;
     struct list_head uri_user_list;
-    char session_id[32];
+    struct list_head rtcp_list;
+    struct list_head rtp_list;
+    char rtcp_recv_buf[SESSION_RECV_BUF_SIZE];
+    char rtp_recv_buf[SESSION_RECV_BUF_SIZE];
+	struct sr_rtcp_pkt rtcp_pkt;
+	struct sr_rtp_pkt rtp_pkt;
     pthread_t rtp_thread;
     pthread_t rtp_send_thread;
     pthread_t rtcp_thread;

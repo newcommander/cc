@@ -19,13 +19,6 @@
 #define RTP_PAYLOAD_MASK 0x007f0000
 #define RTP_SEQNUMB_MASK 0x0000ffff
 
-struct rtp_pkt {
-    uint32_t header;
-    uint32_t timestamp;
-    uint32_t ssrc;
-    uint8_t payload[1400];
-};
-
 static void clean_up(void *arg)
 {
     void *res = NULL;

@@ -10,8 +10,8 @@
 #include <uv.h>
 
 #include "common.h"
-#include "session.h"
 #include "uri.h"
+#include "rtcp.h"
 
 #define RTCP_VERSION_MASK 0xc0000000
 #define RTCP_PADDING_MASK 0x20000000
@@ -19,17 +19,8 @@
 #define RTCP_PKTTYPE_MASK 0x00ff0000
 #define RTCP_LENGTH_MASK  0x0000ffff
 
-struct sr_rtcp_pkt {
-    uint32_t header;
-    uint32_t ssrc;
-    uint32_t ntp_timestamp_msw;
-    uint32_t ntp_timestamp_lsw;
-    uint32_t rtp_timestamp;
-    uint32_t packet_count;
-    uint32_t octet_count;
-    // with no report blocks
-    uint32_t extension[16]; // TODO: fixed size ?
-};
+static struct list_head rtcp_list;
+pthread_mutex_t rtcp_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void clean_up(void *arg)
 {
@@ -161,8 +152,8 @@ static void add_src_desc(struct sr_rtcp_pkt *pkt, struct session *se)
 static char slab[65536];
 static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
-    buf->base = slab;
-    buf->len = sizeof(slab);
+    buf->base = ((struct session*)(container_of(handle, struct session, rtcp_handle)))->rtcp_recv_buf;
+    buf->len = SESSION_RECV_BUF_SIZE;
 }
 
 static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
@@ -173,6 +164,21 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
         printf("%s: recive error: %s\n", __func__, uv_strerror(nread));
         return;
     }
+}
+
+int add_session_to_rtcp_list(struct session *se)
+{
+	if (!se) {
+		printf("%s: Invalid parameter\n", __func__);
+		return -1;
+	}
+	memset(se->rtcp_send_buf, 0, SESSION_BUF_SIZE);
+
+	pthread_mutex_lock(&rtcp_list_mutex);
+	list_add_tail(&se->rtcp_list, &rtcp_list);
+	pthread_mutex_unlock(&rtcp_list_mutex);
+
+	return 0;
 }
 
 extern void* rtp_dispatch(void *arg);
