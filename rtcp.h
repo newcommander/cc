@@ -1,4 +1,5 @@
-#include "session.h"
+#ifndef RTCP_H
+#define RTCP_H
 
 struct sr_rtcp_pkt {
     uint32_t header;
@@ -12,4 +13,11 @@ struct sr_rtcp_pkt {
     uint32_t extension[16]; // TODO: fixed size ?
 };
 
-int add_session_to_rtcp_list(struct session *se);
+extern void rtcp_alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
+extern void rtcp_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags);
+extern void del_from_rtcp_list(struct list_head *list);
+extern void add_to_rtcp_list(struct list_head *list);
+extern void add_src_desc(struct sr_rtcp_pkt *pkt, struct session *se);
+extern void set_pkt_header(struct sr_rtcp_pkt *pkt);
+
+#endif /* RTCP_H */

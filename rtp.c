@@ -231,6 +231,8 @@ void* rtp_dispatch(void *arg)
     ret = uv_timer_start(&timeout, timeout_cb, 500, 500);
     assert(ret == 0);
     uv_run(&se->rtp_loop, UV_RUN_DEFAULT);
+    ret = uv_timer_stop(&timeout);
+    assert(ret == 0);
 
     pthread_cleanup_pop(1);
 

@@ -15,6 +15,8 @@
 
 #include <pthread.h>
 
+struct session;
+
 #include "list.h"
 #include "uri.h"
 #include "rtcp.h"
@@ -35,15 +37,9 @@ struct session {
     struct list_head rtp_list;
     char rtcp_recv_buf[SESSION_RECV_BUF_SIZE];
     char rtp_recv_buf[SESSION_RECV_BUF_SIZE];
-	struct sr_rtcp_pkt rtcp_pkt;
-	struct sr_rtp_pkt rtp_pkt;
-    pthread_t rtp_thread;
-    pthread_t rtp_send_thread;
-    pthread_t rtcp_thread;
-    pthread_t rtcp_send_thread;
+    struct sr_rtcp_pkt rtcp_pkt;
+    struct rtp_pkt rtp_pkt;
     struct Uri *uri;
-    uv_loop_t rtp_loop;
-    uv_loop_t rtcp_loop;
     uv_udp_t rtp_handle;
     uv_udp_t rtcp_handle;
     struct sockaddr_in serv_rtp_addr;
@@ -54,7 +50,6 @@ struct session {
     uint32_t samping_rate;
     uint32_t packet_count;
     uint32_t octet_count;
-    int rtcp_interval;  // ms
     char *encoder_name;
     AVCodecContext *cc;
     AVFrame *frame;
@@ -63,12 +58,14 @@ struct session {
 
 #include "encoder.h"
 
-extern struct list_head session_list;
-
 extern void session_destroy(struct session *se);
+extern void session_destroy_all();
 extern int clean_uri_users(struct Uri *uri);
+extern struct session *find_session_by_id(char *session_id);
 extern struct session *session_create(char *url, struct bufferevent *bev,
         int client_rtp_port, int client_rtcp_port);
+extern void session_list_init();
+extern int add_session_to_rtcp_list(struct session *se);
 
 #endif /* SESSION_H */
 

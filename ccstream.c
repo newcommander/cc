@@ -143,8 +143,6 @@ static void signal_cb(evutil_socket_t sig, short events, void *user_data)
 {
     struct event_base *base = (struct event_base*)user_data;
     struct timeval delay = { 0, 500000 };
-    struct list_head *list_p = NULL;
-    struct session *se = NULL;
 
     if (!base) {
         printf("%s: Invalid parameter\n", __func__);
@@ -152,13 +150,8 @@ static void signal_cb(evutil_socket_t sig, short events, void *user_data)
     }
 
     cc_status = CC_IN_FREE;
+    session_destroy_all();
 
-    for (list_p = session_list.next; list_p != &session_list; ) {
-        se = list_entry(list_p, struct session, list);
-        list_p = list_p->next;
-        bufferevent_flush(se->bev, EV_WRITE, BEV_FLUSH);
-        session_destroy(se);
-    }
     printf("%s: Caught an interrupt signal; exiting cleanly in 0.5 second.\n", __func__);
     event_base_loopexit(base, &delay);
 }
@@ -204,6 +197,7 @@ static int get_active_address(char *nic_name, char *buf, int len)
     return 0;
 }
 
+extern void* rtcp_dispatch(void *arg);
 void *cc_stream(void *arg)
 {
     struct event_base *base;
@@ -211,6 +205,7 @@ void *cc_stream(void *arg)
     struct event *signal_event;
     struct sockaddr_in sin;
     char *nic_name = (char*)arg;
+    pthread_t rtcp_thread;
 
     cc_status = CC_IN_INIT;
 
@@ -218,7 +213,7 @@ void *cc_stream(void *arg)
     if (get_active_address(nic_name, active_addr, sizeof(active_addr)) < 0)
         return NULL;
 
-    INIT_LIST_HEAD(&session_list);
+    session_list_init();
     register_encoders();
 
     memset(base_url, 0, sizeof(base_url));
@@ -251,6 +246,12 @@ void *cc_stream(void *arg)
     }
 
     cc_status = CC_IDLE;
+
+    if (pthread_create(&rtcp_thread, NULL, rtcp_dispatch, NULL) != 0) {
+        printf("%s: creating rtcp thread failed: %s\n", __func__, strerror(errno));
+        rtcp_thread = -1;
+        return NULL;
+    }
 
     event_base_dispatch(base);
 

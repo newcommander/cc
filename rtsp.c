@@ -208,24 +208,6 @@ failed:
     return ret;
 }
 
-static struct session *find_session_by_id(char *session_id)
-{
-    struct session *se = NULL, *p = NULL;
-    if (!session_id)
-        return NULL;
-    pthread_mutex_lock(&session_list_mutex);
-    list_for_each_entry(p, &session_list, list) {
-        if (!strcmp(p->session_id, session_id)) {
-            se = p;
-            if (se->status == SESION_IN_FREE)
-                se = NULL;
-            break;
-        }
-    }
-    pthread_mutex_unlock(&session_list_mutex);
-    return se;
-}
-
 static int make_entity_header(struct Uri *uri, char **buf, int sdp_len)
 {
     char sdp_len_str[32];
@@ -463,9 +445,8 @@ static int make_response_for_play(struct rtsp_request *rr, char **response)
     se->status = SESION_PLAYING;
 
     // play
-    if (pthread_create(&se->rtcp_thread, NULL, rtcp_dispatch, se) != 0) {
-        printf("%s: creating rtcp thread failed: %s\n", __func__, strerror(errno));
-        se->rtcp_thread = 0;
+    if (add_session_to_rtcp_list(se) < 0) {
+        printf("%s: Adding session to rtcp list failed\n", __func__);
         return 500;
     }
 

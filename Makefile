@@ -15,8 +15,8 @@ CFLAGS=-g -Wall -fPIC
 LFLAGS=-lavcodec -lavformat -lswresample -lavutil -pthread \
 	   -lz -lrt -lm -levent_core -luv -shared
 
-OBJ=uri.o session.o encoder.o sample_functions.o \
-	rtp.o rtcp.o rtsp.o ccstream.o
+OBJ=uri.o rtcp.o session.o encoder.o sample_functions.o \
+	rtsp.o ccstream.o
 
 TARGET=libccstream.so
 INSTALL_DIR=/usr/lib64/

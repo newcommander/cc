@@ -1,4 +1,5 @@
-#include "session.h"
+#ifndef RTP_H
+#define RTP_H
 
 struct rtp_pkt {
     uint32_t header;
@@ -7,4 +8,4 @@ struct rtp_pkt {
     uint8_t payload[1400];
 };
 
-int add_session_to_rtp_list(struct session *se);
+#endif /* RTP_H */
