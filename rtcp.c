@@ -36,9 +36,9 @@ static void clean_up(void *arg)
     ret = uv_timer_stop(&loop_alarm);
     assert(ret == 0);
 
-	uv_stop(&rtcp_loop);
+    uv_stop(&rtcp_loop);
 
-	if (send_thread > 0) {
+    if (send_thread > 0) {
         ret = pthread_cancel(send_thread);
         if (ret != 0)
             printf("%s: Cancelling RTCP send thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
@@ -176,7 +176,7 @@ int init_rtcp_handle(uv_udp_t *handle)
 
 void del_session_from_rtcp_list(struct session *se)
 {
-	pthread_mutex_lock(&rtcp_list_mutex);
+    pthread_mutex_lock(&rtcp_list_mutex);
     list_del(&se->rtcp_list);
     pthread_mutex_unlock(&rtcp_list_mutex);
     uv_udp_recv_stop(&se->rtcp_handle);
@@ -205,13 +205,12 @@ int add_session_to_rtcp_list(struct session *se)
     }
 
     pthread_mutex_lock(&rtcp_list_mutex);
-    list_add_tail(&se->list, &rtcp_list);
+    list_add_tail(&se->rtcp_list, &rtcp_list);
     pthread_mutex_unlock(&rtcp_list_mutex);
 
-	return 0;
+    return 0;
 }
 
-//extern void* rtp_dispatch(void *arg);
 static void* send_dispatch(void *arg)
 {
     struct session *se = NULL;
@@ -277,7 +276,7 @@ void* rtcp_dispatch(void *arg)
 
     if (pthread_create(&send_thread, NULL, send_dispatch, NULL) != 0) {
         printf("%s: Creating RTCP send thread failed: %s\n", __func__, strerror(errno));
-		uv_loop_close(&rtcp_loop);
+        uv_loop_close(&rtcp_loop);
         send_thread = -1;
         return NULL;
     }

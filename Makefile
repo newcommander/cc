@@ -15,7 +15,7 @@ CFLAGS=-g -Wall -fPIC -pthread
 LFLAGS=-lavcodec -lavformat -lswresample -lavutil -pthread \
 	   -lz -lrt -lm -levent_core -luv -shared
 
-OBJ=uri.o rtcp.o session.o encoder.o sample_functions.o \
+OBJ=uri.o rtp.o rtcp.o session.o encoder.o sample_functions.o \
 	rtsp.o ccstream.o
 
 TARGET=libccstream.so

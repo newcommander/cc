@@ -61,7 +61,6 @@ static struct status_code response_code[] = {
     { NULL, NULL }
 };
 
-//static struct list_head session_list;
 extern struct list_head session_list;
 extern pthread_mutex_t session_list_mutex;
 
@@ -446,13 +445,11 @@ static int make_response_for_play(struct rtsp_request *rr, char **response)
         printf("%s: Adding session to rtcp list failed\n", __func__);
         return 500;
     }
-	/*
     if (add_session_to_rtp_list(se) < 0) {
         printf("%s: Adding session to rtp list failed\n", __func__);
-		del_session_from_rtcp_list(se);
+        del_session_from_rtcp_list(se);
         return 500;
     }
-	*/
     se->status = SESION_PLAYING;
 
     make_status_line(&status_line, "200", NULL);
@@ -503,11 +500,11 @@ static int make_response_for_teardown(struct rtsp_request *rr, char **response)
         return 454;
     }
 
-//	del_session_from_rtp_list(se);
-	del_session_from_rtcp_list(se);
+    del_session_from_rtp_list(se);
+    del_session_from_rtcp_list(se);
     se->status = SESION_IDLE;
 
-	make_status_line(&status_line, "200", NULL);
+    make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto failed;
     make_response_cseq(&cseq_str, rr->rh.cseq);

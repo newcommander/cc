@@ -13,7 +13,7 @@ void del_session_from_rtp_list(struct session *se)
 {
     del_from_rtp_list(&se->rtp_list);
     uv_udp_recv_stop(&se->rtp_handle);
-	encoder_deinit(se);
+    encoder_deinit(se);
 }
 
 int add_session_to_rtp_list(struct session *se)
@@ -31,13 +31,13 @@ int add_session_to_rtp_list(struct session *se)
 
 //    add_src_desc((struct sr_rtcp_pkt*)se->rtcp_pkt.extension, se);
 
-	if (encoder_init(se) < 0)
-		return -1;
+    if (encoder_init(se) < 0)
+        return -1;
 
     ret = uv_udp_recv_start(&se->rtp_handle, rtp_alloc_cb, rtp_recv_cb);
     if (ret != 0) {
         printf("%s: Starting RTP recive failed: %s\n", __func__, uv_strerror(ret));
-		encoder_deinit(se);
+        encoder_deinit(se);
         return -1;
     }
 
@@ -79,7 +79,7 @@ void session_destroy(struct session *se)
     list_del(&se->list);
     pthread_mutex_unlock(&session_list_mutex);
 
-	// TODO: unbind RTP/RTCP udp port
+    // TODO: unbind RTP/RTCP udp port
     se->bev->wm_read.private_data = NULL;
     bufferevent_free(se->bev);
 
@@ -200,42 +200,40 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
     ret = init_rtcp_handle(&se->rtcp_handle);
     if (ret != 0) {
         printf("%s: Init RTCP UDP handle failed: %s\n", __func__, uv_strerror(ret));
-		goto init_rtcp_handle_failed;
+        goto init_rtcp_handle_failed;
     }
-	/*
     ret = init_rtp_handle(&se->rtp_handle);
     if (ret != 0) {
         printf("%s: Init RTP UDP handle failed: %s\n", __func__, uv_strerror(ret));
         goto init_rtp_handle_failed;
     }
-	*/
 
     port = 1025;
     ret = 1;
     while (ret) {
         if (port > 65534)
-			goto bind_rtp_addr_failed;
+            goto bind_rtp_addr_failed;
 
-		uv_ip4_addr(active_addr, port++, &se->serv_rtp_addr);
+        uv_ip4_addr(active_addr, port++, &se->serv_rtp_addr);
         ret = uv_udp_bind(&se->rtp_handle, (struct sockaddr*)&se->serv_rtp_addr, 0);
         if (ret == UV_EADDRINUSE)
             continue;
         else if (ret) {
-			printf("%s: bind RTP addr failed\n", __func__);
-			goto bind_rtp_addr_failed;
-		}
+            printf("%s: bind RTP addr failed\n", __func__);
+            goto bind_rtp_addr_failed;
+        }
 
-		// FIXME: what if port for rtp is not in use but port for rtcp is in use ?? need unbind the former ??
+        // FIXME: what if port for rtp is not in use but port for rtcp is in use ?? need unbind the former ??
         uv_ip4_addr(active_addr, port++, &se->serv_rtcp_addr);
         ret = uv_udp_bind(&se->rtcp_handle, (struct sockaddr*)&se->serv_rtcp_addr, 0);
         if (ret == UV_EADDRINUSE)
             continue;
         else if (ret) {
-			printf("%s: bind RTCP addr failed\n", __func__);
-			goto bind_rtcp_addr_failed;
-		}
+            printf("%s: bind RTCP addr failed\n", __func__);
+            goto bind_rtcp_addr_failed;
+        }
 
-		break;
+        break;
     }
 
     gettimeofday(&tv, NULL);
@@ -256,13 +254,13 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
     return se;
 
 ref_uri_failed:
-	; // TODO: unbind RTCP port
+    ; // TODO: unbind RTCP port
 bind_rtcp_addr_failed:
-	; // TODO: unbind RTP port
+    ; // TODO: unbind RTP port
 bind_rtp_addr_failed:
-	uv_close((uv_handle_t*)&se->rtp_handle, NULL);
+    uv_close((uv_handle_t*)&se->rtp_handle, NULL);
 init_rtp_handle_failed:
-	uv_close((uv_handle_t*)&se->rtcp_handle, NULL);
+    uv_close((uv_handle_t*)&se->rtcp_handle, NULL);
 init_rtcp_handle_failed:
     session_destroy(se);
     return NULL;

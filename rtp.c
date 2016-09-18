@@ -28,16 +28,16 @@ static pthread_t send_thread = -1;
 
 static void clean_up(void *arg)
 {
-	struct session *se = NULL;
+    struct session *se = NULL;
     void *res = NULL;
     int ret = 0;
 
-	ret = uv_timer_stop(&loop_alarm);
+    ret = uv_timer_stop(&loop_alarm);
     assert(ret == 0);
 
-	uv_stop(&rtp_loop);
+    uv_stop(&rtp_loop);
 
-	if (send_thread > 0) {
+    if (send_thread > 0) {
         ret = pthread_cancel(send_thread);
         if (ret != 0)
             printf("%s: pthread_cancel for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
@@ -45,7 +45,7 @@ static void clean_up(void *arg)
         ret = pthread_join(send_thread, &res);
         if (ret != 0)
             printf("%s: pthread_join for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        se->rtp_send_thread = -1;
+        send_thread = -1;
     }
 
     if (res == PTHREAD_CANCELED)
@@ -53,7 +53,7 @@ static void clean_up(void *arg)
     else
         ; // thread terminated normally
 
-	pthread_mutex_lock(&rtp_list_mutex);
+    pthread_mutex_lock(&rtp_list_mutex);
     while (!list_empty(&rtp_list)) {
         se = list_first_entry(&rtp_list, struct session, rtp_list);
         list_del(&se->rtp_list);
@@ -62,7 +62,7 @@ static void clean_up(void *arg)
     }
     pthread_mutex_unlock(&rtp_list_mutex);
 
-    uv_loop_close(&se->rtp_loop);
+    uv_loop_close(&rtp_loop);
 }
 
 static void set_version(struct rtp_pkt *pkt)
@@ -147,51 +147,48 @@ int init_rtp_handle(uv_udp_t *handle)
     return uv_udp_init(&rtp_loop, handle);
 }
 
-void del_from_rtp_list(struct list_head *list)
+void del_session_from_rtp_list(struct session *se)
 {
     pthread_mutex_lock(&rtp_list_mutex);
-    list_del(list);
+    list_del(&se->list);
     pthread_mutex_unlock(&rtp_list_mutex);
+    uv_udp_recv_stop(&se->rtp_handle);
+    encoder_deinit(se);
 }
 
-void add_to_rtp_list(struct list_head *list)
+int add_session_to_rtp_list(struct session *se)
 {
+    memset(&se->rtp_pkt, 0, sizeof(se->rtp_pkt));
+    set_version(&se->rtp_pkt);
+    if (0) { set_padding(&se->rtp_pkt); set_extension(&se->rtp_pkt); }
+    clear_padding(&se->rtp_pkt);
+    clear_extension(&se->rtp_pkt);
+    set_csrc_count(&se->rtp_pkt, 0);
+    clear_marker(&se->rtp_pkt);
+    set_payload_type(&se->rtp_pkt, 96);
+    se->rtp_pkt.header = htonl(se->rtp_pkt.header);
+    se->rtp_pkt.ssrc = htonl(se->uri->ssrc);
+
+    se->rtp_seq_num = 0;
+    encoder_init(se);
+
     pthread_mutex_lock(&rtp_list_mutex);
-    list_add_tail(list, &rtp_list);
+    list_add_tail(&se->rtp_list, &rtp_list);
     pthread_mutex_unlock(&rtp_list_mutex);
+
+    return 0;
 }
 
 static void* send_dispatch(void *arg)
 {
     struct session *se = NULL;
-    struct rtp_pkt pkt;
     struct msghdr h;
     uv_buf_t uv_buf;
     ssize_t size = 0;
-    uint16_t seq_num = 0;
     int retry = 0, len = 0, n = 0;
     unsigned char data[PACKET_BUFFER_SIZE];
 
-    if (!se) {
-        printf("%s: Invalid parameter\n", __func__);
-        return NULL;
-    }
-
-    memset(&pkt, 0, sizeof(pkt));
-    set_version(&pkt);
-    if (0) { set_padding(&pkt); set_extension(&pkt); }
-    clear_padding(&pkt);
-    clear_extension(&pkt);
-    set_csrc_count(&pkt, 0);
-    clear_marker(&pkt);
-    set_payload_type(&pkt, 96);
-    pkt.header = htonl(pkt.header);
-    pkt.ssrc = htonl(se->uri->ssrc);
-
-    uv_buf.base = (char*)&pkt;
-
     memset(&h, 0, sizeof(struct msghdr));
-    h.msg_name = &se->clit_rtp_addr;
     h.msg_namelen = sizeof(struct sockaddr_in);
     h.msg_iov = (struct iovec*)&uv_buf;
     h.msg_iovlen = 1;
@@ -199,43 +196,51 @@ static void* send_dispatch(void *arg)
     while (1) { // send packets one by one
         msleep(rtp_interval); // TODO: solve sampling frequnce
 
-        pkt.header = ntohl(pkt.header);
-        set_seq_num(&pkt, seq_num++);
-        pkt.header = htonl(pkt.header);
-        set_timestamp(&pkt, se);
+        pthread_mutex_lock(&rtp_list_mutex);
+        list_for_each_entry(se, &rtp_list, rtp_list) { // send packet in each session
+            se->rtp_pkt.header = ntohl(se->rtp_pkt.header);
+            set_seq_num(&se->rtp_pkt, se->rtp_seq_num++);
+            se->rtp_pkt.header = htonl(se->rtp_pkt.header);
+            set_timestamp(&se->rtp_pkt, se);
 
-//        memset(data, 0, PACKET_BUFFER_SIZE);
-        if (sample_frame(se, data, &len) < 0) {
-            printf("%s: video encoding failed on uri: '%s', continue next frame\n", __func__, se->uri->url);
-            continue;
-        }
+            //memset(data, 0, PACKET_BUFFER_SIZE);
+            if (sample_frame(se, data, &len) < 0) {
+                printf("%s: video encoding failed on uri: '%s', continue next frame\n", __func__, se->uri->url);
+                continue;
+            }
 
-        n = 0;
-        while (n < len) { // send a packet segment by segment, in size of 1400
-            uv_buf.len = len - n > 1400 ? 1400 : len - n;
-            memcpy(pkt.payload, data + n, uv_buf.len);
-            n += uv_buf.len;
-            uv_buf.len += 12; // RTP header
-            if (n == len) {
-                pkt.header = ntohl(pkt.header);
-                set_marker(&pkt);
-                pkt.header = htonl(pkt.header);
-            }
-            retry = 5;
-            while (retry--) { // resend segment on failing
-                size = sendmsg(se->rtp_handle.io_watcher.fd, &h, 0);
-                if (size >= 0)
-                    break;
-            }
-            se->packet_count++;
-            se->octet_count += size;
-            if (n == len) {
-                pkt.header = ntohl(pkt.header);
-                clear_marker(&pkt);
-                pkt.header = htonl(pkt.header);
-            }
-        }
-    }
+            uv_buf.base = (char*)&se->rtp_pkt;
+            h.msg_name = &se->clit_rtp_addr;
+
+            // TODO: use multi uv_buf in one msghdr
+            n = 0;
+            while (n < len) { // send a packet segment by segment, in size of 1400
+                uv_buf.len = len - n > 1400 ? 1400 : len - n;
+                memcpy(se->rtp_pkt.payload, data + n, uv_buf.len);
+                n += uv_buf.len;
+                uv_buf.len += 12; // RTP header
+                if (n == len) {
+                    se->rtp_pkt.header = ntohl(se->rtp_pkt.header);
+                    set_marker(&se->rtp_pkt);
+                    se->rtp_pkt.header = htonl(se->rtp_pkt.header);
+                }
+                retry = 5;
+                while (retry--) { // resend segment on failing
+                    size = sendmsg(se->rtp_handle.io_watcher.fd, &h, 0);
+                    if (size >= 0)
+                        break;
+                }
+                se->packet_count++;
+                se->octet_count += size;
+                if (n == len) {
+                    se->rtp_pkt.header = ntohl(se->rtp_pkt.header);
+                    clear_marker(&se->rtp_pkt);
+                    se->rtp_pkt.header = htonl(se->rtp_pkt.header);
+                }
+            } /* while (n < len) */
+        } /* list_for_each_entry */
+        pthread_mutex_unlock(&rtp_list_mutex);
+    } /* while (1) */
 
     return NULL;
 }
@@ -246,8 +251,8 @@ void* rtp_dispatch(void *arg)
 {
     int ret = 0;
 
-	INIT_LIST_HEAD(&rtp_list);
-	memset(&rtp_loop, 0, sizeof(rtp_loop));
+    INIT_LIST_HEAD(&rtp_list);
+    memset(&rtp_loop, 0, sizeof(rtp_loop));
     ret = uv_loop_init(&rtp_loop);
     if (ret != 0) {
         printf("%s: Init RTP UDP loop failed: %s\n", __func__, uv_strerror(ret));
@@ -268,7 +273,7 @@ void* rtp_dispatch(void *arg)
 
     pthread_cleanup_push(clean_up, NULL);
 
-	uv_run(&rtp_loop, UV_RUN_DEFAULT);
+    uv_run(&rtp_loop, UV_RUN_DEFAULT);
 
     pthread_cleanup_pop(1);
 

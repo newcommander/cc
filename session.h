@@ -50,6 +50,7 @@ struct session {
     uint32_t samping_rate;
     uint32_t packet_count;
     uint32_t octet_count;
+    uint16_t rtp_seq_num;
     char *encoder_name;
     AVCodecContext *cc;
     AVFrame *frame;

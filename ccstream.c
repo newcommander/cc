@@ -11,12 +11,12 @@
 #define CC_IN_FREE 2
 static int cc_status;
 
+static const int PORT = 554;
 char active_addr[128];
-const int PORT = 554;
 char base_url[1024];
 
-static pthread_t rtcp_thread = -1;
-static pthread_t rtp_thread = -1;
+static pthread_t rtcp_thread = 0;
+static pthread_t rtp_thread = 0;
 
 static void read_cb(struct bufferevent *bev, void *user_data)
 {
@@ -146,7 +146,6 @@ static void signal_cb(evutil_socket_t sig, short events, void *user_data)
 {
     struct event_base *base = (struct event_base*)user_data;
     struct timeval delay = { 0, 500000 };
-    void *res = NULL;
     int ret = 0;
 
     if (!base) {
@@ -155,21 +154,26 @@ static void signal_cb(evutil_socket_t sig, short events, void *user_data)
     }
 
     cc_status = CC_IN_FREE;
+    if (rtp_thread > 0) {
+        ret = pthread_cancel(rtp_thread);
+        if (ret != 0)
+            printf("%s: Cancelling RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
+
+        ret = pthread_join(rtp_thread, NULL);
+        if (ret != 0)
+            printf("%s: pthread_join for RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        rtp_thread = 0;
+    }
     if (rtcp_thread > 0) {
         ret = pthread_cancel(rtcp_thread);
         if (ret != 0)
             printf("%s: Cancelling RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
-        ret = pthread_join(rtcp_thread, &res);
+        ret = pthread_join(rtcp_thread, NULL);
         if (ret != 0)
             printf("%s: pthread_join for RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        rtcp_thread = -1;
+        rtcp_thread = 0;
     }
-
-    if (res == PTHREAD_CANCELED)
-        ; // thread was canceled
-    else
-        ; // thread terminated normally
 
     session_destroy_all();
 
@@ -218,7 +222,7 @@ static int get_active_address(char *nic_name, char *buf, int len)
     return 0;
 }
 
-//extern void* rtcp_dispatch(void *arg);
+extern void* rtcp_dispatch(void *arg);
 extern void* rtp_dispatch(void *arg);
 void *cc_stream(void *arg)
 {
@@ -227,7 +231,7 @@ void *cc_stream(void *arg)
     struct event *signal_event = NULL;
     struct sockaddr_in sin;
     char *nic_name = (char*)arg;
-	int ret = 0;
+    int ret = 0;
 
     cc_status = CC_IN_INIT;
 
@@ -274,33 +278,35 @@ void *cc_stream(void *arg)
         rtcp_thread = -1;
         goto create_rtcp_thread_failed;
     }
-	/*
     if (pthread_create(&rtp_thread, NULL, rtp_dispatch, NULL) != 0) {
         printf("%s: Creating rtp thread failed: %s\n", __func__, strerror(errno));
         rtp_thread = -1;
         goto create_rtp_thread_failed;
     }
-	*/
 
     event_base_dispatch(base);
 
     cc_status = CC_IN_FREE;
 
-	ret = pthread_cancel(rtp_thread);
-	if (ret != 0)
-		printf("%s: Cancelling RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-	ret = pthread_join(rtp_thread, NULL);
-	if (ret != 0)
-		printf("%s: pthread_join for RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-	rtp_thread = -1;
+    if (rtp_thread != 0) {
+        ret = pthread_cancel(rtp_thread);
+        if (ret != 0)
+            printf("%s: Cancelling RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        ret = pthread_join(rtp_thread, NULL);
+        if (ret != 0)
+            printf("%s: pthread_join for RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        rtp_thread = 0;
+    }
 create_rtp_thread_failed:
-	ret = pthread_cancel(rtcp_thread);
-	if (ret != 0)
-		printf("%s: Cancelling RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-	ret = pthread_join(rtcp_thread, NULL);
-	if (ret != 0)
-		printf("%s: pthread_join for RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-	rtcp_thread = -1;
+    if (rtcp_thread != 0) {
+        ret = pthread_cancel(rtcp_thread);
+        if (ret != 0)
+            printf("%s: Cancelling RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        ret = pthread_join(rtcp_thread, NULL);
+        if (ret != 0)
+            printf("%s: pthread_join for RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        rtcp_thread = 0;
+    }
 create_rtcp_thread_failed:
     evconnlistener_free(listener);
 evsignal_new_failed:
