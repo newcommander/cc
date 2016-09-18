@@ -65,7 +65,9 @@ extern struct session *find_session_by_id(char *session_id);
 extern struct session *session_create(char *url, struct bufferevent *bev,
         int client_rtp_port, int client_rtcp_port);
 extern void session_list_init();
-extern int add_session_to_rtcp_list(struct session *se);
+extern int add_session_to_rtp_list(struct session *se);
+extern void del_session_from_rtcp_list(struct session *se);
+extern void del_session_from_rtp_list(struct session *se);
 
 #endif /* SESSION_H */
 

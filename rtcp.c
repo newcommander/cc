@@ -20,7 +20,8 @@
 #define RTCP_PKTTYPE_MASK 0x00ff0000
 #define RTCP_LENGTH_MASK  0x0000ffff
 
-uv_loop_t rtcp_loop;
+static uv_loop_t rtcp_loop;
+static uv_timer_t loop_alarm;
 static struct list_head rtcp_list;
 static pthread_mutex_t rtcp_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int rtcp_interval = 1500;  // ms
@@ -28,11 +29,16 @@ static pthread_t send_thread = -1;
 
 static void clean_up(void *arg)
 {
+    struct session *se = NULL;
     void *res = NULL;
     int ret = 0;
-    struct session *se = NULL;
 
-    if (send_thread > 0) {
+    ret = uv_timer_stop(&loop_alarm);
+    assert(ret == 0);
+
+	uv_stop(&rtcp_loop);
+
+	if (send_thread > 0) {
         ret = pthread_cancel(send_thread);
         if (ret != 0)
             printf("%s: Cancelling RTCP send thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
@@ -57,23 +63,6 @@ static void clean_up(void *arg)
     pthread_mutex_unlock(&rtcp_list_mutex);
 
     uv_loop_close(&rtcp_loop);
-
-    /*
-    if (se->rtp_thread) {
-        uv_udp_recv_stop(&se->rtp_handle);
-        uv_stop(&se->rtp_loop);
-
-        ret = pthread_join(se->rtp_thread, &res);
-        if (ret != 0)
-            printf("%s: pthread_join for rtp_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        se->rtp_thread = 0;
-    }
-
-    if (res == PTHREAD_CANCELED)
-        ; // thread was canceled
-    else
-        ; // thread terminated normally
-    */
 }
 
 static void set_version(struct sr_rtcp_pkt *pkt)
@@ -108,10 +97,10 @@ static void set_pkt_length(struct sr_rtcp_pkt *pkt, uint32_t length)
     pkt->header = (pkt->header & ~RTCP_LENGTH_MASK) | length;
 }
 
-void set_pkt_header(struct sr_rtcp_pkt *pkt)
+static void set_pkt_header(struct sr_rtcp_pkt *pkt)
 {
     set_version(pkt);
-    if (1)
+    if (0)
         set_padding(pkt);
     clear_padding(pkt);
     set_report_count(pkt, 0);
@@ -151,7 +140,7 @@ static void set_source_count(void *pkt, uint32_t count)
     set_report_count((struct sr_rtcp_pkt*)pkt, count);
 }
 
-void add_src_desc(struct sr_rtcp_pkt *pkt, struct session *se)
+static void add_src_desc(struct sr_rtcp_pkt *pkt, struct session *se)
 {
     set_version(pkt);
     clear_padding(pkt);
@@ -164,16 +153,14 @@ void add_src_desc(struct sr_rtcp_pkt *pkt, struct session *se)
     pkt->ntp_timestamp_lsw = htonl(0x00000000);
 }
 
-//static char slab[65536];
-void rtcp_alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
+static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     buf->base = (container_of((uv_udp_t*)handle, struct session, rtcp_handle))->rtcp_recv_buf;
     buf->len = SESSION_RECV_BUF_SIZE;
 }
 
-void rtcp_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
+static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
 {
-    printf("RTCP recv\n");
     if (nread == 0)
         return;
     if (nread < 0) {
@@ -182,22 +169,50 @@ void rtcp_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const st
     }
 }
 
-void del_from_rtcp_list(struct list_head *list)
+int init_rtcp_handle(uv_udp_t *handle)
 {
-    pthread_mutex_lock(&rtcp_list_mutex);
-    list_del(list);
-    pthread_mutex_unlock(&rtcp_list_mutex);
+    return uv_udp_init(&rtcp_loop, handle);
 }
 
-void add_to_rtcp_list(struct list_head *list)
+void del_session_from_rtcp_list(struct session *se)
 {
-    pthread_mutex_lock(&rtcp_list_mutex);
-    list_add_tail(list, &rtcp_list);
+	pthread_mutex_lock(&rtcp_list_mutex);
+    list_del(&se->rtcp_list);
     pthread_mutex_unlock(&rtcp_list_mutex);
+    uv_udp_recv_stop(&se->rtcp_handle);
+}
+
+int add_session_to_rtcp_list(struct session *se)
+{
+    int ret;
+
+    if (!se) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+
+    memset(&se->rtcp_pkt, 0, sizeof(se->rtcp_pkt));
+    se->timestamp_offset = (uint32_t)rand();
+    se->samping_rate = 90000;
+    set_pkt_header(&se->rtcp_pkt);
+    se->rtcp_pkt.ssrc = htonl(se->uri->ssrc);
+    add_src_desc((struct sr_rtcp_pkt*)se->rtcp_pkt.extension, se);
+
+    ret = uv_udp_recv_start(&se->rtcp_handle, alloc_cb, recv_cb);
+    if (ret != 0) {
+        printf("%s: Starting RTCP recive failed: %s\n", __func__, uv_strerror(ret));
+        return -1;
+    }
+
+    pthread_mutex_lock(&rtcp_list_mutex);
+    list_add_tail(&se->list, &rtcp_list);
+    pthread_mutex_unlock(&rtcp_list_mutex);
+
+	return 0;
 }
 
 //extern void* rtp_dispatch(void *arg);
-void* send_dispatch(void *arg)
+static void* send_dispatch(void *arg)
 {
     struct session *se = NULL;
     struct timeval tv, last_tv;
@@ -205,14 +220,6 @@ void* send_dispatch(void *arg)
     uv_buf_t uv_buf;
     ssize_t size;
     int over_time, retry;
-
-    /*
-    if (pthread_create(&se->rtp_thread, NULL, rtp_dispatch, se) != 0) {
-        printf("%s: creating rtp thread failed: %s\n", __func__, strerror(errno));
-        se->rtp_thread = 0;
-        return NULL;
-    }
-    */
 
     uv_buf.len = 44; // TODO: how to compute length ?
     memset(&h, 0, sizeof(struct msghdr));
@@ -254,11 +261,10 @@ void* send_dispatch(void *arg)
     return NULL;
 }
 
-static void timeout_cb(uv_timer_t *timer) {}
+static void timeout_cb(uv_timer_t *timer) { pthread_testcancel(); }
 
 void* rtcp_dispatch(void *arg)
 {
-    uv_timer_t timeout;
     int ret = 0;
 
     INIT_LIST_HEAD(&rtcp_list);
@@ -269,26 +275,24 @@ void* rtcp_dispatch(void *arg)
         return NULL; // TODO: how to let the thread creator know this failing ??
     }
 
-    pthread_cleanup_push(clean_up, NULL);
-
     if (pthread_create(&send_thread, NULL, send_dispatch, NULL) != 0) {
         printf("%s: Creating RTCP send thread failed: %s\n", __func__, strerror(errno));
+		uv_loop_close(&rtcp_loop);
         send_thread = -1;
-        goto out;
+        return NULL;
     }
 
-    ret = uv_timer_init(&rtcp_loop, &timeout);
+    ret = uv_timer_init(&rtcp_loop, &loop_alarm);
     assert(ret == 0);
-    ret = uv_timer_start(&timeout, timeout_cb, 500, 500);
+    ret = uv_timer_start(&loop_alarm, timeout_cb, 100, 100);
     assert(ret == 0);
+
+    pthread_cleanup_push(clean_up, NULL);
 
     uv_run(&rtcp_loop, UV_RUN_DEFAULT);
 
-    ret = uv_timer_stop(&timeout);
-    assert(ret == 0);
-
-out:
     pthread_cleanup_pop(1);
+
     return NULL;
 }
 

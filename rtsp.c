@@ -424,7 +424,6 @@ failed:
     return 500;
 }
 
-extern void* rtcp_dispatch(void *arg);
 static int make_response_for_play(struct rtsp_request *rr, char **response)
 {
     struct session *se = NULL;
@@ -442,13 +441,19 @@ static int make_response_for_play(struct rtsp_request *rr, char **response)
         printf("%s: Session already in PLAYING status\n", __func__);
         return 455;
     }
-    se->status = SESION_PLAYING;
 
-    // play
     if (add_session_to_rtcp_list(se) < 0) {
         printf("%s: Adding session to rtcp list failed\n", __func__);
         return 500;
     }
+	/*
+    if (add_session_to_rtp_list(se) < 0) {
+        printf("%s: Adding session to rtp list failed\n", __func__);
+		del_session_from_rtcp_list(se);
+        return 500;
+    }
+	*/
+    se->status = SESION_PLAYING;
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
@@ -498,7 +503,11 @@ static int make_response_for_teardown(struct rtsp_request *rr, char **response)
         return 454;
     }
 
-    make_status_line(&status_line, "200", NULL);
+//	del_session_from_rtp_list(se);
+	del_session_from_rtcp_list(se);
+    se->status = SESION_IDLE;
+
+	make_status_line(&status_line, "200", NULL);
     if (!status_line)
         goto failed;
     make_response_cseq(&cseq_str, rr->rh.cseq);

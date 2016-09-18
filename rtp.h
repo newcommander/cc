@@ -8,4 +8,7 @@ struct rtp_pkt {
     uint8_t payload[1400];
 };
 
+//extern int init_rtp_handle(uv_udp_t *handle);
+//extern void del_from_rtp_list(struct list_head *list);
+
 #endif /* RTP_H */

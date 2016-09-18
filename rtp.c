@@ -19,28 +19,50 @@
 #define RTP_PAYLOAD_MASK 0x007f0000
 #define RTP_SEQNUMB_MASK 0x0000ffff
 
+static uv_loop_t rtp_loop;
+static uv_timer_t loop_alarm;
+static struct list_head rtp_list;
+static pthread_mutex_t rtp_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int rtp_interval = 40;  // ms
+static pthread_t send_thread = -1;
+
 static void clean_up(void *arg)
 {
+	struct session *se = NULL;
     void *res = NULL;
     int ret = 0;
-    struct session *se = (struct session*)arg;
-    assert(se);
 
-    if (se->rtp_send_thread) {
-        ret = pthread_cancel(se->rtp_send_thread);
+	ret = uv_timer_stop(&loop_alarm);
+    assert(ret == 0);
+
+	uv_stop(&rtp_loop);
+
+	if (send_thread > 0) {
+        ret = pthread_cancel(send_thread);
         if (ret != 0)
             printf("%s: pthread_cancel for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
 
-        ret = pthread_join(se->rtp_send_thread, &res);
+        ret = pthread_join(send_thread, &res);
         if (ret != 0)
             printf("%s: pthread_join for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        se->rtp_send_thread = 0;
+        se->rtp_send_thread = -1;
     }
 
     if (res == PTHREAD_CANCELED)
         ; // thread was canceled
     else
         ; // thread terminated normally
+
+	pthread_mutex_lock(&rtp_list_mutex);
+    while (!list_empty(&rtp_list)) {
+        se = list_first_entry(&rtp_list, struct session, rtp_list);
+        list_del(&se->rtp_list);
+        uv_udp_recv_stop(&se->rtp_handle);
+        encoder_deinit(se);
+    }
+    pthread_mutex_unlock(&rtp_list_mutex);
+
+    uv_loop_close(&se->rtp_loop);
 }
 
 static void set_version(struct rtp_pkt *pkt)
@@ -104,14 +126,13 @@ static void set_timestamp(struct rtp_pkt *pkt, struct session *se)
     pkt->timestamp = htonl(timeval_to_rtp_timestamp(&tv, se));
 }
 
-static char slab[65536];
-static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
+void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
-    buf->base = slab;
-    buf->len = sizeof(slab);
+    buf->base = (container_of((uv_udp_t*)handle, struct session, rtp_handle))->rtp_recv_buf;
+    buf->len = SESSION_RECV_BUF_SIZE;
 }
 
-static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
+void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
 {
     if (nread == 0)
         return;
@@ -121,9 +142,28 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
     }
 }
 
+int init_rtp_handle(uv_udp_t *handle)
+{
+    return uv_udp_init(&rtp_loop, handle);
+}
+
+void del_from_rtp_list(struct list_head *list)
+{
+    pthread_mutex_lock(&rtp_list_mutex);
+    list_del(list);
+    pthread_mutex_unlock(&rtp_list_mutex);
+}
+
+void add_to_rtp_list(struct list_head *list)
+{
+    pthread_mutex_lock(&rtp_list_mutex);
+    list_add_tail(list, &rtp_list);
+    pthread_mutex_unlock(&rtp_list_mutex);
+}
+
 static void* send_dispatch(void *arg)
 {
-    struct session *se = (struct session*)arg;
+    struct session *se = NULL;
     struct rtp_pkt pkt;
     struct msghdr h;
     uv_buf_t uv_buf;
@@ -157,7 +197,7 @@ static void* send_dispatch(void *arg)
     h.msg_iovlen = 1;
 
     while (1) { // send packets one by one
-        msleep(40); // TODO: solve sampling frequnce
+        msleep(rtp_interval); // TODO: solve sampling frequnce
 
         pkt.header = ntohl(pkt.header);
         set_seq_num(&pkt, seq_num++);
@@ -200,45 +240,38 @@ static void* send_dispatch(void *arg)
     return NULL;
 }
 
-static void timeout_cb(uv_timer_t *timer) {}
+static void timeout_cb(uv_timer_t *timer) { pthread_testcancel(); }
 
 void* rtp_dispatch(void *arg)
 {
-    struct session *se = (struct session*)arg;
-    uv_timer_t timeout;
-    int ret;
+    int ret = 0;
 
-    if (encoder_init(se) < 0)
-        return NULL;
-
-    pthread_cleanup_push(clean_up, se);
-
-    ret = uv_udp_recv_start(&se->rtp_handle, alloc_cb, recv_cb);
+	INIT_LIST_HEAD(&rtp_list);
+	memset(&rtp_loop, 0, sizeof(rtp_loop));
+    ret = uv_loop_init(&rtp_loop);
     if (ret != 0) {
-        printf("%s: starting RTP recive error: %s\n", __func__, uv_strerror(ret));
-        goto out;
+        printf("%s: Init RTP UDP loop failed: %s\n", __func__, uv_strerror(ret));
+        return NULL; // TODO: how to let the thread creator know this failing ??
     }
 
-    if (pthread_create(&se->rtp_send_thread, NULL, send_dispatch, se) != 0) {
-        printf("%s: creating RTP send thread failed: %s\n", __func__, strerror(errno));
-        uv_udp_recv_stop(&se->rtp_handle);
-        se->rtp_send_thread = 0;
-        goto out;
+    if (pthread_create(&send_thread, NULL, send_dispatch, NULL) != 0) {
+        printf("%s: Creating RTP send thread failed: %s\n", __func__, strerror(errno));
+        uv_loop_close(&rtp_loop);
+        send_thread = -1;
+        return NULL;
     }
 
-    ret = uv_timer_init(&se->rtp_loop, &timeout);
+    ret = uv_timer_init(&rtp_loop, &loop_alarm);
     assert(ret == 0);
-    ret = uv_timer_start(&timeout, timeout_cb, 500, 500);
+    ret = uv_timer_start(&loop_alarm, timeout_cb, 100, 100);
     assert(ret == 0);
-    uv_run(&se->rtp_loop, UV_RUN_DEFAULT);
-    ret = uv_timer_stop(&timeout);
-    assert(ret == 0);
+
+    pthread_cleanup_push(clean_up, NULL);
+
+	uv_run(&rtp_loop, UV_RUN_DEFAULT);
 
     pthread_cleanup_pop(1);
 
-    encoder_deinit(se);
-
-out:
-    uv_loop_close(&se->rtp_loop);
     return NULL;
 }
+

@@ -11,7 +11,7 @@ LINK=-L$(LIBEVENT)/lib \
 	 -L$(LIBUV)/lib
 
 CC=gcc
-CFLAGS=-g -Wall -fPIC
+CFLAGS=-g -Wall -fPIC -pthread
 LFLAGS=-lavcodec -lavformat -lswresample -lavutil -pthread \
 	   -lz -lrt -lm -levent_core -luv -shared
 
