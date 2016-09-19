@@ -1,14 +1,5 @@
-LIBEVENT=/root/work/stream/output
-FFMPEG=/root/work/stream/output
-LIBUV=/root/work/stream/output
-
-INCLUDE=-I$(LIBEVENT)/include \
-		-I$(FFMPEG)/include \
-		-I$(LIBUV)/include
-
-LINK=-L$(LIBEVENT)/lib \
-	 -L$(FFMPEG)/lib \
-	 -L$(LIBUV)/lib
+INCLUDE=-I/root/work/stream/output/include
+LINK=-L/root/work/stream/output/lib
 
 CC=gcc
 CFLAGS=-g -Wall -fPIC -pthread

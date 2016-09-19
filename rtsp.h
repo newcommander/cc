@@ -13,6 +13,7 @@
 #define MTH_SET_PARAMETER   10
 #define MTH_TEARDOWN        11
 
+#define MAX_URL_LENGTH 1024
 #define RTSP_VERSION "RTSP/1.0"
 
 struct status_code {
@@ -22,7 +23,7 @@ struct status_code {
 
 //do NOT alloc this cause never free
 struct rtsp_request_header {
-    char session_id[33];
+    char session_id[64];
     char *user_agent;
     char *transport;
     char *accept;
@@ -33,14 +34,14 @@ struct rtsp_request_header {
 struct rtsp_request {
     struct rtsp_request_header rh;
     struct bufferevent *bev;
-    char version[33];
+    char version[64];
     int method;
     char *url;
 };
 
-extern int convert_rtsp_request(struct rtsp_request **rr, struct bufferevent *bev, char *buf, int len);
-extern void error_reply(int code, int cseq, char **response);
 extern int make_response(struct rtsp_request *rr, char **buf);
+extern void make_error_reply(int code, int cseq, char **response);
+extern int convert_rtsp_request(struct rtsp_request **rr, struct bufferevent *bev, char *buf, int len);
 extern void release_rtsp_request(struct rtsp_request *rr);
 
 #endif /* RTSP_H */

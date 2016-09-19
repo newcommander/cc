@@ -30,7 +30,7 @@ static void read_cb(struct bufferevent *bev, void *user_data)
     char *buf = (char*)calloc(len + 1, 1);
     if (!buf) {
         printf("%s: calloc failed\n", __func__);
-        error_reply(500, 0, &response_str);
+        make_error_reply(500, 0, &response_str);
         goto reply;
     }
 
@@ -40,10 +40,11 @@ static void read_cb(struct bufferevent *bev, void *user_data)
         p += offset;
 
     ret = convert_rtsp_request(&rr, bev, buf, len);
-    if (ret != 0 || !rr) {
-        error_reply(ret, rr ? rr->rh.cseq : 0, &response_str);
+    if (ret != 0) {
+        make_error_reply(ret, rr ? rr->rh.cseq : 0, &response_str);
         goto reply;
     }
+    printf("convert rtsp request success\n");
 
     ret = make_response(rr, &response_str);
     if (ret != 0) {
@@ -51,7 +52,7 @@ static void read_cb(struct bufferevent *bev, void *user_data)
             free(response_str);
             response_str = NULL;
         }
-        error_reply(ret, rr->rh.cseq, &response_str);
+        make_error_reply(ret, rr->rh.cseq, &response_str);
     }
 
 reply:
@@ -61,14 +62,18 @@ reply:
         free(response_str);
     }
 
-    if (ret != 0 || rr->method == MTH_TEARDOWN) {
+    if (ret != 0) {
         se = (struct session*)bev->wm_read.private_data;
         if (se)
             session_destroy(se);
+        else
+            bufferevent_free(bev);
     }
 
-    release_rtsp_request(rr);
-    free(buf);
+    if (rr)
+        release_rtsp_request(rr);
+    if (buf)
+        free(buf);
 }
 
 static void write_cb(struct bufferevent *bev, void *user_data)
@@ -103,7 +108,6 @@ static void event_cb(struct bufferevent *bev, short events, void *user_data)
             break;
         default:
             printf("%s: Unknow event: 0x%x\n", __func__, events);
-            break;
         }
         return;
     }
@@ -145,39 +149,13 @@ static void listener_cb(struct evconnlistener *listener, evutil_socket_t fd, str
 static void signal_cb(evutil_socket_t sig, short events, void *user_data)
 {
     struct event_base *base = (struct event_base*)user_data;
-    struct timeval delay = { 0, 500000 };
-    int ret = 0;
+    struct timeval delay = { 0, 500000 }; // 0.5 second
 
     if (!base) {
         printf("%s: Invalid parameter\n", __func__);
         return;
     }
-
     cc_status = CC_IN_FREE;
-    if (rtp_thread > 0) {
-        ret = pthread_cancel(rtp_thread);
-        if (ret != 0)
-            printf("%s: Cancelling RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-
-        ret = pthread_join(rtp_thread, NULL);
-        if (ret != 0)
-            printf("%s: pthread_join for RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        rtp_thread = 0;
-    }
-    if (rtcp_thread > 0) {
-        ret = pthread_cancel(rtcp_thread);
-        if (ret != 0)
-            printf("%s: Cancelling RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-
-        ret = pthread_join(rtcp_thread, NULL);
-        if (ret != 0)
-            printf("%s: pthread_join for RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        rtcp_thread = 0;
-    }
-
-    session_destroy_all();
-
-    printf("%s: Caught an interrupt signal; exiting cleanly in 0.5 second.\n", __func__);
     event_base_loopexit(base, &delay);
 }
 
@@ -239,13 +217,13 @@ void *cc_stream(void *arg)
     if (get_active_address(nic_name, active_addr, sizeof(active_addr)) < 0)
         return NULL;
 
-    session_list_init();
-    register_encoders();
-
     memset(base_url, 0, sizeof(base_url));
     strncat(base_url, "rtsp://", 7);
     strncat(base_url, active_addr, strlen(active_addr));
+
+    register_encoders();
     uris_init(base_url);
+    session_list_init();
 
     base = event_base_new();
     if (!base) {
@@ -275,12 +253,12 @@ void *cc_stream(void *arg)
 
     if (pthread_create(&rtcp_thread, NULL, rtcp_dispatch, NULL) != 0) {
         printf("%s: Creating rtcp thread failed: %s\n", __func__, strerror(errno));
-        rtcp_thread = -1;
+        rtcp_thread = 0;
         goto create_rtcp_thread_failed;
     }
     if (pthread_create(&rtp_thread, NULL, rtp_dispatch, NULL) != 0) {
         printf("%s: Creating rtp thread failed: %s\n", __func__, strerror(errno));
-        rtp_thread = -1;
+        rtp_thread = 0;
         goto create_rtp_thread_failed;
     }
 
@@ -314,6 +292,7 @@ evsignal_new_failed:
 listener_bind_failed:
     event_base_free(base);
 event_base_new_failed:
+    session_destroy_all();
     uris_deinit();
 
     return NULL;
