@@ -24,7 +24,7 @@ static uv_timer_t loop_alarm;
 static struct list_head rtp_list;
 static pthread_mutex_t rtp_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int rtp_interval = 40;  // ms
-static pthread_t send_thread = -1;
+static pthread_t send_thread = 0;
 
 static void clean_up(void *arg)
 {
@@ -37,7 +37,7 @@ static void clean_up(void *arg)
 
     uv_stop(&rtp_loop);
 
-    if (send_thread > 0) {
+    if (send_thread != 0) {
         ret = pthread_cancel(send_thread);
         if (ret != 0)
             printf("%s: pthread_cancel for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
@@ -45,7 +45,7 @@ static void clean_up(void *arg)
         ret = pthread_join(send_thread, &res);
         if (ret != 0)
             printf("%s: pthread_join for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        send_thread = -1;
+        send_thread = 0;
     }
 
     if (res == PTHREAD_CANCELED)
@@ -158,6 +158,13 @@ void del_session_from_rtp_list(struct session *se)
 
 int add_session_to_rtp_list(struct session *se)
 {
+    int ret = 0;
+
+    if (!se) {
+        printf("%s: Invalid parameter\n", __func__);
+        return -1;
+    }
+
     memset(&se->rtp_pkt, 0, sizeof(se->rtp_pkt));
     set_version(&se->rtp_pkt);
     if (0) { set_padding(&se->rtp_pkt); set_extension(&se->rtp_pkt); }
@@ -170,7 +177,18 @@ int add_session_to_rtp_list(struct session *se)
     se->rtp_pkt.ssrc = htonl(se->uri->ssrc);
 
     se->rtp_seq_num = 0;
-    encoder_init(se);
+    ret = encoder_init(se);
+    if (ret < 0) {
+        printf("%s: Init encoder failed\n", __func__);
+        return -1;
+    }
+
+    ret = uv_udp_recv_start(&se->rtp_handle, alloc_cb, recv_cb);
+    if (ret != 0) {
+        printf("%s: Starting RTP recive failed: %s\n", __func__, uv_strerror(ret));
+        encoder_deinit(se);
+        return -1;
+    }
 
     pthread_mutex_lock(&rtp_list_mutex);
     list_add_tail(&se->rtp_list, &rtp_list);
@@ -262,7 +280,7 @@ void* rtp_dispatch(void *arg)
     if (pthread_create(&send_thread, NULL, send_dispatch, NULL) != 0) {
         printf("%s: Creating RTP send thread failed: %s\n", __func__, strerror(errno));
         uv_loop_close(&rtp_loop);
-        send_thread = -1;
+        send_thread = 0;
         return NULL;
     }
 

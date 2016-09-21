@@ -9,6 +9,7 @@ struct rtp_pkt {
 };
 
 extern int init_rtp_handle(uv_udp_t *handle);
-extern void del_from_rtp_list(struct session *se);
+extern int add_session_to_rtp_list(struct session *se);
+extern void del_session_from_rtp_list(struct session *se);
 
 #endif /* RTP_H */

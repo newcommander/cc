@@ -59,16 +59,12 @@ struct session {
 
 #include "encoder.h"
 
-extern void session_destroy(struct session *se);
-extern void session_destroy_all();
-extern int clean_uri_users(struct Uri *uri);
-extern struct session *find_session_by_id(char *session_id);
+extern void session_list_init();
 extern struct session *session_create(char *url, struct bufferevent *bev,
         int client_rtp_port, int client_rtcp_port);
-extern void session_list_init();
-extern int add_session_to_rtp_list(struct session *se);
-extern void del_session_from_rtcp_list(struct session *se);
-extern void del_session_from_rtp_list(struct session *se);
+extern struct session *find_session_by_id(char *session_id);
+extern void session_destroy(struct session *se);
+extern void session_destroy_all();
 
 #endif /* SESSION_H */
 

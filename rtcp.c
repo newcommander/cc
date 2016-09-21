@@ -11,7 +11,6 @@
 
 #include "common.h"
 #include "session.h"
-#include "uri.h"
 #include "rtcp.h"
 
 #define RTCP_VERSION_MASK 0xc0000000
@@ -25,7 +24,7 @@ static uv_timer_t loop_alarm;
 static struct list_head rtcp_list;
 static pthread_mutex_t rtcp_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int rtcp_interval = 1500;  // ms
-static pthread_t send_thread = -1;
+static pthread_t send_thread = 0;
 
 static void clean_up(void *arg)
 {
@@ -38,7 +37,7 @@ static void clean_up(void *arg)
 
     uv_stop(&rtcp_loop);
 
-    if (send_thread > 0) {
+    if (send_thread != 0) {
         ret = pthread_cancel(send_thread);
         if (ret != 0)
             printf("%s: Cancelling RTCP send thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
@@ -46,7 +45,7 @@ static void clean_up(void *arg)
         ret = pthread_join(send_thread, &res);
         if (ret != 0)
             printf("%s: pthread_join for RTCP send thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        send_thread = -1;
+        send_thread = 0;
     }
 
     if (res == PTHREAD_CANCELED)
@@ -277,7 +276,7 @@ void* rtcp_dispatch(void *arg)
     if (pthread_create(&send_thread, NULL, send_dispatch, NULL) != 0) {
         printf("%s: Creating RTCP send thread failed: %s\n", __func__, strerror(errno));
         uv_loop_close(&rtcp_loop);
-        send_thread = -1;
+        send_thread = 0;
         return NULL;
     }
 
