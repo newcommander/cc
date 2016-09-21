@@ -150,7 +150,7 @@ int init_rtp_handle(uv_udp_t *handle)
 void del_session_from_rtp_list(struct session *se)
 {
     pthread_mutex_lock(&rtp_list_mutex);
-    list_del(&se->list);
+    list_del(&se->rtp_list);
     pthread_mutex_unlock(&rtp_list_mutex);
     uv_udp_recv_stop(&se->rtp_handle);
     encoder_deinit(se);

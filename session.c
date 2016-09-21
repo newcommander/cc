@@ -56,21 +56,21 @@ void session_destroy(struct session *se)
     }
 
     switch(se->status) {
-    case SESION_IDLE:
+    case SESSION_IDLE:
         unref_uri(se->uri, &se->uri_user_list);
-        se->status = SESION_IN_FREE;
+        se->status = SESSION_IN_FREE;
         break;
-    case SESION_PLAYING:
+    case SESSION_PLAYING:
         del_session_from_rtp_list(se);
         del_session_from_rtcp_list(se);
         unref_uri(se->uri, &se->uri_user_list);
-        se->status = SESION_IN_FREE;
+        se->status = SESSION_IN_FREE;
         break;
-    case SESION_IN_FREE:
+    case SESSION_IN_FREE:
         break;
     }
 
-    if (se->status != SESION_IN_FREE) {
+    if (se->status != SESSION_IN_FREE) {
         printf("%s: Could not destroy session on %s\n", __func__, se->uri->url);
         return;
     }
@@ -139,7 +139,7 @@ struct session *find_session_by_id(char *session_id)
     list_for_each_entry(p, &session_list, list) {
         if (!strcmp(p->session_id, session_id)) {
             se = p;
-            if (se->status == SESION_IN_FREE)
+            if (se->status == SESSION_IN_FREE)
                 se = NULL;
             break;
         }
@@ -245,7 +245,7 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
         goto ref_uri_failed;
     }
 
-    se->status = SESION_IDLE;
+    se->status = SESSION_IDLE;
 
     pthread_mutex_lock(&session_list_mutex);
     list_add(&se->list, &session_list);

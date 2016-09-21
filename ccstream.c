@@ -44,7 +44,6 @@ static void read_cb(struct bufferevent *bev, void *user_data)
         make_error_reply(ret, rr ? rr->rh.cseq : 0, &response_str);
         goto reply;
     }
-    printf("convert rtsp request success\n");
 
     ret = make_response(rr, &response_str);
     if (ret != 0) {

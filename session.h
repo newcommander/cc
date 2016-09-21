@@ -26,9 +26,9 @@ struct session;
 
 struct session {
     char session_id[32];
-#define SESION_IDLE 0
-#define SESION_PLAYING 1
-#define SESION_IN_FREE 2
+#define SESSION_IDLE 0
+#define SESSION_PLAYING 1
+#define SESSION_IN_FREE 2
     int status;
     struct bufferevent *bev;
     struct list_head list;

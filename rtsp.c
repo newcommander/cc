@@ -74,7 +74,6 @@ static char* find_phrase_by_code(char *code)
             return p->phrase;
         p++;
     }
-    printf("%s: No element found\n", __func__);
     return NULL;
 }
 
@@ -91,7 +90,6 @@ static char* find_code_by_phrase(char *phrase)
             return p->code;
         p++;
     }
-    printf("%s: no elem found\n", __func__);
     return NULL;
 }
 
@@ -123,7 +121,7 @@ static int make_status_line(char **buf, char *code, char *phrase)
         if (!(*buf))
             goto calloc_failed;
     }
-    sprintf(*buf, "RTSP/1.0 %s %s\r\n", code, phrase);
+    sprintf(*buf, "%s %s %s\r\n", RTSP_VERSION, code, phrase);
     return 0;
 
 calloc_failed:
@@ -219,6 +217,7 @@ static int make_entity_header(struct Uri *uri, char **buf, int sdp_len)
     memset(sdp_len_str, 0, 32);
     snprintf(sdp_len_str, 32, "%d", sdp_len);
 
+    *buf = NULL;
     *buf = (char*)calloc(strlen(uri->url) + strlen(sdp_len_str) + 66, 1);
     if (!(*buf)) {
         printf("%s: calloc failed\n", __func__);
@@ -271,10 +270,12 @@ static int make_response_for_describe(struct rtsp_request *rr, char **response)
         sdp_str = uri->sdp_str_mpeg4;
     else if (!strncmp(encoder_name, "h264", 4))
         sdp_str = uri->sdp_str_h264;
-    else
-        goto failed;
+    else {
+        printf("%s: Unsupported user agent: %s\n", __func__, rr->rh.user_agent);
+        return 501;
+    }
     if (!sdp_str) {
-        printf("%s: no sdp string matched\n", __func__);
+        printf("%s: No SDP string matched[encoder: %s]\n", __func__, encoder_name);
         return 500;
     }
 
@@ -328,7 +329,7 @@ static int make_response_for_setup(struct rtsp_request *rr, char **response)
     char *p_head = NULL, *p_tail = NULL, *p_tmp = NULL;
     char *protocol = NULL, *mode = NULL;
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
-    char tmp[1024];
+    char tmp[MAX_URL_LENGTH];
     int c_rtp_port = 0, c_rtcp_port = 0;
     int len;
 
@@ -437,7 +438,7 @@ static int make_response_for_play(struct rtsp_request *rr, char **response)
         return 454;
     }
 
-    if (se->status == SESION_PLAYING) {
+    if (se->status == SESSION_PLAYING) {
         printf("%s: Session already in PLAYING status\n", __func__);
         return 455;
     }
@@ -451,7 +452,7 @@ static int make_response_for_play(struct rtsp_request *rr, char **response)
         del_session_from_rtcp_list(se);
         return 500;
     }
-    se->status = SESION_PLAYING;
+    se->status = SESSION_PLAYING;
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
@@ -463,7 +464,7 @@ static int make_response_for_play(struct rtsp_request *rr, char **response)
     if (!cseq_str)
         goto failed;
 
-    len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + 120;
+    len = strlen(status_line) + strlen(cseq_str) + strlen(date_str) + 3;
     *response = (char*)calloc(len, 1);
     if (!(*response)) {
         printf("%s: calloc failed\n", __func__);
@@ -477,8 +478,13 @@ static int make_response_for_play(struct rtsp_request *rr, char **response)
     free(status_line);
     free(cseq_str);
     free(date_str);
+
     return 0;
+
 failed:
+    del_session_from_rtp_list(se);
+    del_session_from_rtcp_list(se);
+    se->status = SESSION_IDLE;
     if (status_line)
         free(status_line);
     if (cseq_str)
@@ -503,7 +509,7 @@ static int make_response_for_teardown(struct rtsp_request *rr, char **response)
 
     del_session_from_rtp_list(se);
     del_session_from_rtcp_list(se);
-    se->status = SESION_IDLE;
+    se->status = SESSION_IDLE;
 
     make_status_line(&status_line, "200", NULL);
     if (!status_line)
@@ -672,6 +678,10 @@ static int get_request_line(struct rtsp_request *rr, char *buf, int len)
         return 505;
     }
     strncpy(rr->version, p_head, p_tail - p_head);
+    if (strncmp(rr->version, RTSP_VERSION, strlen(rr->version) > strlen(RTSP_VERSION) ? strlen(RTSP_VERSION) : strlen(rr->version))) {
+        printf("%s: RTSP Version not supported: '%s'\n", __func__, rr->version);
+        return 505;
+    }
 
     return 0;
 }
