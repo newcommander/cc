@@ -7,9 +7,9 @@
 #include <assert.h>
 
 #include "common.h"
-#include "session.h"
 #include "encoder.h"
 #include "uri.h"
+#include "rtp.h"
 
 #define RTP_VERSION_MASK 0xc0000000
 #define RTP_PADDING_MASK 0x20000000
@@ -58,6 +58,7 @@ static void clean_up(void *arg)
         se = list_first_entry(&rtp_list, struct session, rtp_list);
         list_del(&se->rtp_list);
         uv_udp_recv_stop(&se->rtp_handle);
+        // TODO: set se->status to SESSION_IDEL ??
         encoder_deinit(se);
     }
     pthread_mutex_unlock(&rtp_list_mutex);
@@ -117,7 +118,7 @@ static void set_seq_num(struct rtp_pkt *pkt, uint16_t seq_num)
     pkt->header = (pkt->header & ~RTP_SEQNUMB_MASK) | (uint32_t)seq_num;
 }
 
-extern uint32_t timeval_to_rtp_timestamp(struct timeval *tv, struct session *se);
+uint32_t timeval_to_rtp_timestamp(struct timeval *tv, struct session *se);
 static void set_timestamp(struct rtp_pkt *pkt, struct session *se)
 {
     struct timeval tv;
@@ -126,18 +127,18 @@ static void set_timestamp(struct rtp_pkt *pkt, struct session *se)
     pkt->timestamp = htonl(timeval_to_rtp_timestamp(&tv, se));
 }
 
-void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
+static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     buf->base = (container_of((uv_udp_t*)handle, struct session, rtp_handle))->rtp_recv_buf;
     buf->len = SESSION_RECV_BUF_SIZE;
 }
 
-void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
+static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
 {
     if (nread == 0)
         return;
     if (nread < 0) {
-        printf("%s: recive error: %s\n", __func__, uv_strerror(nread));
+        printf("%s: RTP recive error: %s\n", __func__, uv_strerror(nread));
         return;
     }
 }
@@ -200,10 +201,11 @@ int add_session_to_rtp_list(struct session *se)
 static void* send_dispatch(void *arg)
 {
     struct session *se = NULL;
+    struct timeval tv, last_tv;
     struct msghdr h;
     uv_buf_t uv_buf;
     ssize_t size = 0;
-    int retry = 0, len = 0, n = 0;
+    int retry = 0, len = 0, n = 0, over_time;
     unsigned char data[PACKET_BUFFER_SIZE];
 
     memset(&h, 0, sizeof(struct msghdr));
@@ -212,9 +214,10 @@ static void* send_dispatch(void *arg)
     h.msg_iovlen = 1;
 
     while (1) { // send packets one by one
-        msleep(rtp_interval); // TODO: solve sampling frequnce
-
+        gettimeofday(&tv, NULL);
+        last_tv = tv;
         pthread_mutex_lock(&rtp_list_mutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
         list_for_each_entry(se, &rtp_list, rtp_list) { // send packet in each session
             se->rtp_pkt.header = ntohl(se->rtp_pkt.header);
             set_seq_num(&se->rtp_pkt, se->rtp_seq_num++);
@@ -257,7 +260,14 @@ static void* send_dispatch(void *arg)
                 }
             } /* while (n < len) */
         } /* list_for_each_entry */
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         pthread_mutex_unlock(&rtp_list_mutex);
+        gettimeofday(&tv, NULL);
+        over_time = (tv.tv_sec - last_tv.tv_sec) * 1000 + (tv.tv_usec - last_tv.tv_usec) / 1000;
+        if (((float)over_time / (float)rtp_interval) > 0.8) {
+            printf("%s: Too many RTP session, you may create new thread.\n", __func__);
+        }
+        msleep((rtp_interval - over_time)); // TODO: solve sampling frequnce
     } /* while (1) */
 
     return NULL;

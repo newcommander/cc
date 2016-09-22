@@ -10,7 +10,6 @@
 #include <uv.h>
 
 #include "common.h"
-#include "session.h"
 #include "rtcp.h"
 
 #define RTCP_VERSION_MASK 0xc0000000
@@ -58,45 +57,46 @@ static void clean_up(void *arg)
         se = list_first_entry(&rtcp_list, struct session, rtcp_list);
         list_del(&se->rtcp_list);
         uv_udp_recv_stop(&se->rtcp_handle);
+        // TODO: set se->status to SESSION_IDEL ??
     }
     pthread_mutex_unlock(&rtcp_list_mutex);
 
     uv_loop_close(&rtcp_loop);
 }
 
-static void set_version(struct sr_rtcp_pkt *pkt)
+static void set_version(struct rtcp_sr_pkt *pkt)
 {
     pkt->header = (pkt->header & ~RTCP_VERSION_MASK) | (uint32_t)2 << 30;
 }
 
-static void set_padding(struct sr_rtcp_pkt *pkt)
+static void set_padding(struct rtcp_sr_pkt *pkt)
 {
     pkt->header |= (uint32_t)RTCP_PADDING_MASK;
 }
 
-static void clear_padding(struct sr_rtcp_pkt *pkt)
+static void clear_padding(struct rtcp_sr_pkt *pkt)
 {
     pkt->header &= (uint32_t)~RTCP_PADDING_MASK;
 }
 
-static void set_report_count(struct sr_rtcp_pkt *pkt, uint32_t count)
+static void set_report_count(struct rtcp_sr_pkt *pkt, uint32_t count)
 {
     count &= (uint32_t)0x0000001f;
     pkt->header = (pkt->header & ~RTCP_RPCOUNT_MASK) | count << 24;
 }
 
-static void set_pkt_type(struct sr_rtcp_pkt *pkt, uint32_t code)
+static void set_pkt_type(struct rtcp_sr_pkt *pkt, uint32_t code)
 {
     pkt->header = (pkt->header & ~RTCP_PKTTYPE_MASK) | code << 16;
 }
 
-static void set_pkt_length(struct sr_rtcp_pkt *pkt, uint32_t length)
+static void set_pkt_length(struct rtcp_sr_pkt *pkt, uint32_t length)
 {
     length &= (uint32_t)0x0000ffff;
     pkt->header = (pkt->header & ~RTCP_LENGTH_MASK) | length;
 }
 
-static void set_pkt_header(struct sr_rtcp_pkt *pkt)
+static void set_pkt_header(struct rtcp_sr_pkt *pkt)
 {
     set_version(pkt);
     if (0)
@@ -108,7 +108,7 @@ static void set_pkt_header(struct sr_rtcp_pkt *pkt)
     pkt->header = htonl(pkt->header);
 }
 
-static void set_ntp_timestamp(struct sr_rtcp_pkt *pkt, struct timeval *tv)
+static void set_ntp_timestamp(struct rtcp_sr_pkt *pkt, struct timeval *tv)
 {
     if (!pkt || !tv)
         return;
@@ -127,7 +127,7 @@ uint32_t timeval_to_rtp_timestamp(struct timeval *tv, struct session *se)
     return se->timestamp_offset + increment;
 }
 
-static void set_rtp_timestamp(struct sr_rtcp_pkt *pkt, struct timeval *tv, struct session *se)
+static void set_rtp_timestamp(struct rtcp_sr_pkt *pkt, struct timeval *tv, struct session *se)
 {
     if (!pkt)
         return;
@@ -136,10 +136,10 @@ static void set_rtp_timestamp(struct sr_rtcp_pkt *pkt, struct timeval *tv, struc
 
 static void set_source_count(void *pkt, uint32_t count)
 {
-    set_report_count((struct sr_rtcp_pkt*)pkt, count);
+    set_report_count((struct rtcp_sr_pkt*)pkt, count);
 }
 
-static void add_src_desc(struct sr_rtcp_pkt *pkt, struct session *se)
+static void add_src_desc(struct rtcp_sr_pkt *pkt, struct session *se)
 {
     set_version(pkt);
     clear_padding(pkt);
@@ -163,7 +163,7 @@ static void recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
     if (nread == 0)
         return;
     if (nread < 0) {
-        printf("%s: recive error: %s\n", __func__, uv_strerror(nread));
+        printf("%s: RTCP recive error: %s\n", __func__, uv_strerror(nread));
         return;
     }
 }
@@ -195,7 +195,7 @@ int add_session_to_rtcp_list(struct session *se)
     se->samping_rate = 90000;
     set_pkt_header(&se->rtcp_pkt);
     se->rtcp_pkt.ssrc = htonl(se->uri->ssrc);
-    add_src_desc((struct sr_rtcp_pkt*)se->rtcp_pkt.extension, se);
+    add_src_desc((struct rtcp_sr_pkt*)se->rtcp_pkt.extension, se);
 
     ret = uv_udp_recv_start(&se->rtcp_handle, alloc_cb, recv_cb);
     if (ret != 0) {
@@ -229,6 +229,7 @@ static void* send_dispatch(void *arg)
         gettimeofday(&tv, NULL);
         last_tv = tv;
         pthread_mutex_lock(&rtcp_list_mutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
         list_for_each_entry(se, &rtcp_list, rtcp_list) {
             set_ntp_timestamp(&se->rtcp_pkt, &tv);
             set_rtp_timestamp(&se->rtcp_pkt, &tv, se);
@@ -248,11 +249,12 @@ static void* send_dispatch(void *arg)
             if (retry <= 0)
                 printf("%s: Sending RTCP packet failed. session_id=0x%s, url=%s\n", __func__, se->session_id, se->uri->url);
         }
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         pthread_mutex_unlock(&rtcp_list_mutex);
         gettimeofday(&tv, NULL);
         over_time = (tv.tv_sec - last_tv.tv_sec) * 1000 + (tv.tv_usec - last_tv.tv_usec) / 1000;
         if (((float)over_time / (float)rtcp_interval) > 0.8) {
-            printf("%s: Too many rtcp session, you may create new thread.\n", __func__);
+            printf("%s: Too many RTCP session, you may create new thread.\n", __func__);
         }
         msleep((rtcp_interval - over_time));
     }

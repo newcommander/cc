@@ -1,8 +1,15 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
 
-#include "session.h"
+#include <event2/bufferevent.h>
+#include <event2/bufferevent_struct.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
+#include <uv.h>
+
 #include "encoder.h"
 #include "rtsp.h"
 
@@ -199,8 +206,8 @@ static int get_active_address(char *nic_name, char *buf, int len)
     return 0;
 }
 
-extern void* rtcp_dispatch(void *arg);
-extern void* rtp_dispatch(void *arg);
+void* rtcp_dispatch(void *arg);
+void* rtp_dispatch(void *arg);
 void *cc_stream(void *arg)
 {
     struct event_base *base = NULL;

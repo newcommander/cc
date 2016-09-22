@@ -6,8 +6,8 @@ struct stream_arg {
     int dim[4];
 };
 
-extern struct stream_arg g_show;
+struct stream_arg g_show;
 
-extern void *cc_stream(void *arg);
+void *cc_stream(void *arg);
 
 #endif /* CCSTREAM_H */

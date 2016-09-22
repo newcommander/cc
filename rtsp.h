@@ -39,9 +39,9 @@ struct rtsp_request {
     char *url;
 };
 
-extern int make_response(struct rtsp_request *rr, char **buf);
-extern void make_error_reply(int code, int cseq, char **response);
-extern int convert_rtsp_request(struct rtsp_request **rr, struct bufferevent *bev, char *buf, int len);
-extern void release_rtsp_request(struct rtsp_request *rr);
+void make_error_reply(int code, int cseq, char **response);
+int convert_rtsp_request(struct rtsp_request **rr, struct bufferevent *bev, char *buf, int len);
+void release_rtsp_request(struct rtsp_request *rr);
+int make_response(struct rtsp_request *rr, char **buf);
 
 #endif /* RTSP_H */

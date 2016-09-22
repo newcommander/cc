@@ -1,9 +1,8 @@
 #include <uv.h>
 
-#include "common.h"
 #include "session.h"
 
-extern char active_addr[128];
+char active_addr[128];
 
 static struct list_head session_list;
 static pthread_mutex_t session_list_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -17,23 +16,18 @@ void session_destroy(struct session *se)
 
     switch(se->status) {
     case SESSION_IDLE:
-        unref_uri(se->uri, &se->uri_user_list);
-        se->status = SESSION_IN_FREE;
+        unref_uri(se);
         break;
     case SESSION_PLAYING:
         del_session_from_rtp_list(se);
         del_session_from_rtcp_list(se);
-        unref_uri(se->uri, &se->uri_user_list);
-        se->status = SESSION_IN_FREE;
+        unref_uri(se);
         break;
     case SESSION_IN_FREE:
         break;
     }
 
-    if (se->status != SESSION_IN_FREE) {
-        printf("%s: Could not destroy session on %s\n", __func__, se->uri->url);
-        return;
-    }
+    se->status = SESSION_IN_FREE;
 
     pthread_mutex_lock(&session_list_mutex);
     list_del(&se->list);
@@ -90,10 +84,9 @@ struct session *find_session_by_id(char *session_id)
     return se;
 }
 
-struct session *session_create(char *url, struct bufferevent *bev, int client_rtp_port, int client_rtcp_port)
+struct session *session_create(struct Uri *uri, struct bufferevent *bev, int client_rtp_port, int client_rtcp_port)
 {
     struct session *se = NULL;
-    struct Uri *uri = NULL;
     struct timeval tv;
     struct sockaddr clit_addr;
     struct sockaddr_in *clit_addr_in;
@@ -101,14 +94,8 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
     int port, ret;
     char clit_ip[16];
 
-    if (!url || !bev || client_rtp_port < 1025 || client_rtcp_port < 1025) {
+    if (!uri || !bev || client_rtp_port < 1025 || client_rtcp_port < 1025) {
         printf("%s: Invalid parameter\n", __func__);
-        return NULL;
-    }
-
-    uri = find_uri(url);
-    if (!uri) {
-        printf("%s: No URI with url: %s found\n", __func__, url);
         return NULL;
     }
 
@@ -182,7 +169,7 @@ struct session *session_create(char *url, struct bufferevent *bev, int client_rt
     // XXX: need more complex ?
     snprintf(se->session_id, 9, "%04x%04x", (unsigned int)tv.tv_usec, (unsigned int)rand());
 
-    ret = ref_uri(se->uri, &se->uri_user_list);
+    ret = ref_uri(se);
     if (ret < 0) {
         printf("%s: Cannot reference uri(%s)\n", __func__, se->uri->url);
         goto ref_uri_failed;

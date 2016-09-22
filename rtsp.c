@@ -9,8 +9,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <libgen.h>
+#include <time.h>
 
-#include "session.h"
+#include "uri.h"
 #include "rtsp.h"
 
 static struct status_code response_code[] = {
@@ -326,10 +327,11 @@ failed:
 static int make_response_for_setup(struct rtsp_request *rr, char **response)
 {
     struct session *se = NULL;
+    struct Uri *uri = NULL;
     char *p_head = NULL, *p_tail = NULL, *p_tmp = NULL;
     char *protocol = NULL, *mode = NULL;
     char *status_line = NULL, *cseq_str = NULL, *date_str = NULL;
-    char tmp[MAX_URL_LENGTH];
+    char *url_without_track = NULL;
     int c_rtp_port = 0, c_rtcp_port = 0;
     int len;
 
@@ -339,6 +341,16 @@ static int make_response_for_setup(struct rtsp_request *rr, char **response)
         return 400;
     }
     len = strlen(rr->rh.transport);
+
+    url_without_track = strdup(rr->url);
+    url_without_track = dirname(url_without_track);
+    uri = find_uri(url_without_track);
+    if (!uri) {
+        printf("%s: No uri(%s) found\n", __func__, url_without_track);
+        free(url_without_track);
+        return 404;
+    }
+    free(url_without_track);
 
     p_head = rr->rh.transport;
     p_tail = rr->rh.transport;
@@ -394,9 +406,7 @@ static int make_response_for_setup(struct rtsp_request *rr, char **response)
         goto failed;
     }
 
-    memset(tmp, 0, sizeof(tmp));
-    memcpy(tmp, rr->url, strlen(rr->url));
-    se = session_create(dirname(tmp), rr->bev, c_rtp_port, c_rtcp_port);
+    se = session_create(uri, rr->bev, c_rtp_port, c_rtcp_port);
     if (!se)
         goto failed;
     se->encoder_name = get_encoder_name("xiaomi2");
@@ -422,6 +432,8 @@ failed:
         free(cseq_str);
     if (date_str)
         free(date_str);
+    if (*response)
+        free(*response);
     return 500;
 }
 
@@ -667,7 +679,7 @@ static int get_request_line(struct rtsp_request *rr, char *buf, int len)
 
     for (p_head = ++p_tail; *p_tail != '\r' && p_tail != buf + len - 1; p_tail++) ;
     if (*p_tail != '\r') {
-        printf("Invalid RTSP request when parse rtsp version\n");
+        printf("Invalid RTSP request when parse RTSP version\n");
         free(rr->url);
         return 400;
     }

@@ -16,6 +16,7 @@
 #include <pthread.h>
 
 struct session;
+struct Uri;
 
 #include "list.h"
 #include "uri.h"
@@ -37,7 +38,7 @@ struct session {
     struct list_head rtp_list;
     char rtcp_recv_buf[SESSION_RECV_BUF_SIZE];
     char rtp_recv_buf[SESSION_RECV_BUF_SIZE];
-    struct sr_rtcp_pkt rtcp_pkt;
+    struct rtcp_sr_pkt rtcp_pkt;
     struct rtp_pkt rtp_pkt;
     struct Uri *uri;
     uv_udp_t rtp_handle;
@@ -57,14 +58,12 @@ struct session {
     int pts;
 };
 
-#include "encoder.h"
-
-extern void session_list_init();
-extern struct session *session_create(char *url, struct bufferevent *bev,
+void session_list_init();
+struct session *session_create(struct Uri *uri, struct bufferevent *bev,
         int client_rtp_port, int client_rtcp_port);
-extern struct session *find_session_by_id(char *session_id);
-extern void session_destroy(struct session *se);
-extern void session_destroy_all();
+struct session *find_session_by_id(char *session_id);
+void session_destroy(struct session *se);
+void session_destroy_all();
 
 #endif /* SESSION_H */
 

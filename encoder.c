@@ -2,14 +2,15 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include <libavcodec/avcodec.h>
+
 #include "common.h"
 #include "session.h"
-#include "uri.h"
 
 static int encode_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *out_buf, int *out_buf_len)
 {
     int ret = 0, got_output = 0;
-    char errbuf[1024];
+    char errbuf[512];
     AVPacket pkt;
 
     if (!cc || !frame || !out_buf || !out_buf_len) {
@@ -65,7 +66,7 @@ int sample_frame(struct session *se, unsigned char *out_buf, int *out_buf_len)
 
     se->frame->pts = se->pts;
     if (se->uri->sample_func(se->frame, se->uri->width, se->uri->height) < 0) {
-        printf("%s: sampling frame failed\n", __func__);
+        printf("%s: Sampling frame failed: [URI: %s, session id: %s]\n", __func__, se->uri->url, se->session_id);
         return -1;
     }
     se->pts++;
@@ -73,7 +74,7 @@ int sample_frame(struct session *se, unsigned char *out_buf, int *out_buf_len)
     //TODO: frame filters...
 
     if (encode_frame(se->cc, se->frame, out_buf, out_buf_len) < 0) {
-        printf("%s: Encoding frame failed\n", __func__);
+        printf("%s: Encoding frame failed [%s, session id: %s]\n", __func__, se->uri->url, se->session_id);
         return -1;
     }
 
@@ -90,7 +91,7 @@ int encoder_init(struct session *se)
     AVCodec *codec = NULL;
     int codec_id;
     int ret = 0;
-    char errbuf[1024];
+    char errbuf[512];
 
     if (!se || !se->uri || !strlen(se->encoder_name)) {
         printf("%s: Invalid parameter\n", __func__);
@@ -108,13 +109,13 @@ int encoder_init(struct session *se)
     codec = avcodec_find_encoder(codec_id);
     if (!codec) {
         printf("%s: Codec not found\n", __func__);
-        goto failed;
+        return -1;
     }
 
     se->cc = avcodec_alloc_context3(codec);
     if (!se->cc) {
         printf("%s: Could not allocate video codec context\n", __func__);
-        goto failed;
+        return -1;
     }
 
     /* frames per second */

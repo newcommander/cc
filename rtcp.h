@@ -1,7 +1,7 @@
 #ifndef RTCP_H
 #define RTCP_H
 
-struct sr_rtcp_pkt {
+struct rtcp_sr_pkt {
     uint32_t header;
     uint32_t ssrc;
     uint32_t ntp_timestamp_msw;
@@ -13,8 +13,10 @@ struct sr_rtcp_pkt {
     uint32_t extension[16]; // TODO: fixed size ?
 };
 
-extern int init_rtcp_handle(uv_udp_t *handle);
-extern int add_session_to_rtcp_list(struct session *se);
-extern void del_session_from_rtcp_list(struct session *se);
+#include "session.h"
+
+int init_rtcp_handle(uv_udp_t *handle);
+void del_session_from_rtcp_list(struct session *se);
+int add_session_to_rtcp_list(struct session *se);
 
 #endif /* RTCP_H */
