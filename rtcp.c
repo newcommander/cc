@@ -30,53 +30,6 @@ void rtcp_handle_close_cb(uv_handle_t *handle)
     container_of((uv_udp_t*)handle, struct session, rtcp_handle)->rtcp_handle_status = HANDLE_CLOSED;
 }
 
-static void clean_up(void *arg)
-{
-    struct session *se = NULL;
-    void *res = NULL;
-    int ret = 0;
-
-    ret = uv_timer_stop(&loop_alarm);
-    assert(ret == 0);
-
-    uv_stop(&rtcp_loop);
-
-    if (send_thread != 0) {
-        ret = pthread_cancel(send_thread);
-        if (ret != 0)
-            printf("%s: Cancelling RTCP send thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-
-        ret = pthread_join(send_thread, &res);
-        if (ret != 0)
-            printf("%s: pthread_join for RTCP send thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        send_thread = 0;
-    }
-
-    if (res == PTHREAD_CANCELED)
-        ; // thread was canceled
-    else
-        ; // thread terminated normally
-
-    pthread_mutex_lock(&rtcp_list_mutex);
-    while (!list_empty(&rtcp_list)) {
-        se = list_first_entry(&rtcp_list, struct session, rtcp_list);
-        list_del(&se->rtcp_list);
-        uv_udp_recv_stop(&se->rtcp_handle);
-        se->rtcp_handle_status = HANDLE_CLOSED;
-        // TODO: set se->status to SESSION_IDEL ??
-        /*
-         * TODO: close se->rtcp_handle in correct way. In this code, rtcp_handle_close_cb will not be called
-        if ((se->rtcp_handle_status != HANDLE_CLOSING) && (se->rtcp_handle_status != HANDLE_CLOSED)) {
-            uv_close((uv_handle_t*)&se->rtcp_handle, rtcp_handle_close_cb);
-            se->rtcp_handle_status = HANDLE_CLOSING;
-        }
-        */
-    }
-    pthread_mutex_unlock(&rtcp_list_mutex);
-
-    uv_loop_close(&rtcp_loop);
-}
-
 static void set_version(struct rtcp_sr_pkt *pkt)
 {
     pkt->header = (pkt->header & ~RTCP_VERSION_MASK) | (uint32_t)2 << 30;
@@ -276,6 +229,47 @@ static void* send_dispatch(void *arg)
 
 static void timeout_cb(uv_timer_t *timer) { pthread_testcancel(); }
 
+void rtcp_stop()
+{
+    struct session *se = NULL;
+    void *res = NULL;
+    int ret = 0;
+
+    if (send_thread != 0) {
+        ret = pthread_cancel(send_thread);
+        if (ret != 0)
+            printf("%s: Cancelling RTCP send thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
+
+        ret = pthread_join(send_thread, &res);
+        if (ret != 0)
+            printf("%s: pthread_join for RTCP send thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        send_thread = 0;
+    }
+
+    if (res == PTHREAD_CANCELED)
+        ; // thread was canceled
+    else
+        ; // thread terminated normally
+
+    pthread_mutex_lock(&rtcp_list_mutex);
+    while (!list_empty(&rtcp_list)) {
+        se = list_first_entry(&rtcp_list, struct session, rtcp_list);
+        list_del(&se->rtcp_list);
+        uv_udp_recv_stop(&se->rtcp_handle);
+        // TODO: set se->status to SESSION_IDEL ??
+        if ((se->rtcp_handle_status != HANDLE_CLOSING) && (se->rtcp_handle_status != HANDLE_CLOSED)) {
+            uv_close((uv_handle_t*)&se->rtcp_handle, rtcp_handle_close_cb);
+            se->rtcp_handle_status = HANDLE_CLOSING;
+        }
+    }
+    pthread_mutex_unlock(&rtcp_list_mutex);
+
+    ret = uv_timer_stop(&loop_alarm);
+    assert(ret == 0);
+
+    uv_stop(&rtcp_loop);
+}
+
 void* rtcp_dispatch(void *arg)
 {
     int ret = 0;
@@ -300,11 +294,9 @@ void* rtcp_dispatch(void *arg)
     ret = uv_timer_start(&loop_alarm, timeout_cb, 100, 100);
     assert(ret == 0);
 
-    pthread_cleanup_push(clean_up, NULL);
-
     uv_run(&rtcp_loop, UV_RUN_DEFAULT);
 
-    pthread_cleanup_pop(1);
+    uv_loop_close(&rtcp_loop);
 
     return NULL;
 }

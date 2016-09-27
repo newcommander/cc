@@ -31,54 +31,6 @@ void rtp_handle_close_cb(uv_handle_t *handle)
     container_of((uv_udp_t*)handle, struct session, rtp_handle)->rtp_handle_status = HANDLE_CLOSED;
 }
 
-static void clean_up(void *arg)
-{
-    struct session *se = NULL;
-    void *res = NULL;
-    int ret = 0;
-
-    ret = uv_timer_stop(&loop_alarm);
-    assert(ret == 0);
-
-    uv_stop(&rtp_loop);
-
-    if (send_thread != 0) {
-        ret = pthread_cancel(send_thread);
-        if (ret != 0)
-            printf("%s: pthread_cancel for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-
-        ret = pthread_join(send_thread, &res);
-        if (ret != 0)
-            printf("%s: pthread_join for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        send_thread = 0;
-    }
-
-    if (res == PTHREAD_CANCELED)
-        ; // thread was canceled
-    else
-        ; // thread terminated normally
-
-    pthread_mutex_lock(&rtp_list_mutex);
-    while (!list_empty(&rtp_list)) {
-        se = list_first_entry(&rtp_list, struct session, rtp_list);
-        list_del(&se->rtp_list);
-        uv_udp_recv_stop(&se->rtp_handle);
-        se->rtp_handle_status = HANDLE_CLOSED;
-        // TODO: set se->status to SESSION_IDEL ??
-        /*
-         * TODO: close se->rtp_handle in correct way. In this code, rtp_handle_close_cb will not be called
-        if ((se->rtp_handle_status != HANDLE_CLOSING) && (se->rtp_handle_status != HANDLE_CLOSED)) {
-            uv_close((uv_handle_t*)&se->rtp_handle, rtp_handle_close_cb);
-            se->rtp_handle_status = HANDLE_CLOSING;
-        }
-        */
-        encoder_deinit(se);
-    }
-    pthread_mutex_unlock(&rtp_list_mutex);
-
-    uv_loop_close(&rtp_loop);
-}
-
 static void set_version(struct rtp_pkt *pkt)
 {
     pkt->header = (pkt->header & ~RTP_VERSION_MASK) | (uint32_t)2 << 30;
@@ -288,6 +240,48 @@ static void* send_dispatch(void *arg)
 
 static void timeout_cb(uv_timer_t *timer) { pthread_testcancel(); }
 
+void rtp_stop()
+{
+    struct session *se = NULL;
+    void *res = NULL;
+    int ret = 0;
+
+    if (send_thread != 0) {
+        ret = pthread_cancel(send_thread);
+        if (ret != 0)
+            printf("%s: pthread_cancel for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+
+        ret = pthread_join(send_thread, &res);
+        if (ret != 0)
+            printf("%s: pthread_join for RTP send_thread return error: %s\n", __func__, strerror(ret)); // TODO: and what ?
+        send_thread = 0;
+    }
+
+    if (res == PTHREAD_CANCELED)
+        ; // thread was canceled
+    else
+        ; // thread terminated normally
+
+    pthread_mutex_lock(&rtp_list_mutex);
+    while (!list_empty(&rtp_list)) {
+        se = list_first_entry(&rtp_list, struct session, rtp_list);
+        list_del(&se->rtp_list);
+        uv_udp_recv_stop(&se->rtp_handle);
+        // TODO: set se->status to SESSION_IDEL ??
+        if ((se->rtp_handle_status != HANDLE_CLOSING) && (se->rtp_handle_status != HANDLE_CLOSED)) {
+            uv_close((uv_handle_t*)&se->rtp_handle, rtp_handle_close_cb);
+            se->rtp_handle_status = HANDLE_CLOSING;
+        }
+        encoder_deinit(se);
+    }
+    pthread_mutex_unlock(&rtp_list_mutex);
+
+    ret = uv_timer_stop(&loop_alarm);
+    assert(ret == 0);
+
+    uv_stop(&rtp_loop);
+}
+
 void* rtp_dispatch(void *arg)
 {
     int ret = 0;
@@ -312,11 +306,9 @@ void* rtp_dispatch(void *arg)
     ret = uv_timer_start(&loop_alarm, timeout_cb, 100, 100);
     assert(ret == 0);
 
-    pthread_cleanup_push(clean_up, NULL);
-
     uv_run(&rtp_loop, UV_RUN_DEFAULT);
 
-    pthread_cleanup_pop(1);
+    uv_loop_close(&rtp_loop);
 
     return NULL;
 }

@@ -215,7 +215,6 @@ void *cc_stream(void *arg)
     struct event *signal_event = NULL;
     struct sockaddr_in sin;
     char *nic_name = (char*)arg;
-    int ret = 0;
 
     cc_status = CC_IN_INIT;
 
@@ -272,25 +271,9 @@ void *cc_stream(void *arg)
 
     cc_status = CC_IN_FREE;
 
-    if (rtp_thread != 0) {
-        ret = pthread_cancel(rtp_thread);
-        if (ret != 0)
-            printf("%s: Cancelling RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        ret = pthread_join(rtp_thread, NULL);
-        if (ret != 0)
-            printf("%s: pthread_join for RTP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        rtp_thread = 0;
-    }
+    rtp_stop();
 create_rtp_thread_failed:
-    if (rtcp_thread != 0) {
-        ret = pthread_cancel(rtcp_thread);
-        if (ret != 0)
-            printf("%s: Cancelling RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        ret = pthread_join(rtcp_thread, NULL);
-        if (ret != 0)
-            printf("%s: pthread_join for RTCP thread failed: %s\n", __func__, strerror(ret)); // TODO: and what ?
-        rtcp_thread = 0;
-    }
+    rtcp_stop();
 create_rtcp_thread_failed:
     evconnlistener_free(listener);
 evsignal_new_failed:
