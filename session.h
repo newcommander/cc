@@ -43,6 +43,11 @@ struct session {
     struct Uri *uri;
     uv_udp_t rtp_handle;
     uv_udp_t rtcp_handle;
+#define HANDLE_BUSY 0
+#define HANDLE_CLOSING 1
+#define HANDLE_CLOSED 2
+    int rtp_handle_status;
+    int rtcp_handle_status;
     struct sockaddr_in serv_rtp_addr;
     struct sockaddr_in clit_rtp_addr;
     struct sockaddr_in serv_rtcp_addr;

@@ -26,6 +26,11 @@ static pthread_mutex_t rtp_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int rtp_interval = 40;  // ms
 static pthread_t send_thread = 0;
 
+void rtp_handle_close_cb(uv_handle_t *handle)
+{
+    container_of((uv_udp_t*)handle, struct session, rtp_handle)->rtp_handle_status = HANDLE_CLOSED;
+}
+
 static void clean_up(void *arg)
 {
     struct session *se = NULL;
@@ -58,7 +63,15 @@ static void clean_up(void *arg)
         se = list_first_entry(&rtp_list, struct session, rtp_list);
         list_del(&se->rtp_list);
         uv_udp_recv_stop(&se->rtp_handle);
+        se->rtp_handle_status = HANDLE_CLOSED;
         // TODO: set se->status to SESSION_IDEL ??
+        /*
+         * TODO: close se->rtp_handle in correct way. In this code, rtp_handle_close_cb will not be called
+        if ((se->rtp_handle_status != HANDLE_CLOSING) && (se->rtp_handle_status != HANDLE_CLOSED)) {
+            uv_close((uv_handle_t*)&se->rtp_handle, rtp_handle_close_cb);
+            se->rtp_handle_status = HANDLE_CLOSING;
+        }
+        */
         encoder_deinit(se);
     }
     pthread_mutex_unlock(&rtp_list_mutex);
@@ -264,7 +277,7 @@ static void* send_dispatch(void *arg)
         pthread_mutex_unlock(&rtp_list_mutex);
         gettimeofday(&tv, NULL);
         over_time = (tv.tv_sec - last_tv.tv_sec) * 1000 + (tv.tv_usec - last_tv.tv_usec) / 1000;
-        if (((float)over_time / (float)rtp_interval) > 0.8) {
+        if ((over_time * 10 / rtp_interval) > 8) {  // 80%
             printf("%s: Too many RTP session, you may create new thread.\n", __func__);
         }
         msleep((rtp_interval - over_time)); // TODO: solve sampling frequnce

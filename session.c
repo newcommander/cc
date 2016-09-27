@@ -1,5 +1,6 @@
 #include <uv.h>
 
+#include "common.h"
 #include "session.h"
 
 char active_addr[128];
@@ -33,8 +34,14 @@ void session_destroy(struct session *se)
     list_del(&se->list);
     pthread_mutex_unlock(&session_list_mutex);
 
-    uv_close((uv_handle_t*)&se->rtp_handle, NULL);
-    uv_close((uv_handle_t*)&se->rtcp_handle, NULL);
+    if ((se->rtp_handle_status != HANDLE_CLOSING) && (se->rtp_handle_status != HANDLE_CLOSED)) {
+        uv_close((uv_handle_t*)&se->rtp_handle, rtp_handle_close_cb);
+        se->rtp_handle_status = HANDLE_CLOSING;
+    }
+    if ((se->rtcp_handle_status != HANDLE_CLOSING) && (se->rtcp_handle_status != HANDLE_CLOSED)) {
+        uv_close((uv_handle_t*)&se->rtcp_handle, rtcp_handle_close_cb);
+        se->rtcp_handle_status = HANDLE_CLOSING;
+    }
     se->bev->wm_read.private_data = NULL;
     bufferevent_free(se->bev);
 
@@ -50,6 +57,8 @@ void session_destroy(struct session *se)
         av_frame_free(&se->frame);
         se->frame = NULL;
     }
+
+    while ((se->rtp_handle_status != HANDLE_CLOSED) || (se->rtcp_handle_status != HANDLE_CLOSED)) msleep(10);
 
     free(se);
 }
@@ -186,9 +195,11 @@ struct session *session_create(struct Uri *uri, struct bufferevent *bev, int cli
 ref_uri_failed:
     ;
 bind_failed:
-    uv_close((uv_handle_t*)&se->rtp_handle, NULL);
+    uv_close((uv_handle_t*)&se->rtp_handle, rtp_handle_close_cb);
+    se->rtp_handle_status = HANDLE_CLOSING;
 init_rtp_handle_failed:
-    uv_close((uv_handle_t*)&se->rtcp_handle, NULL);
+    uv_close((uv_handle_t*)&se->rtcp_handle, rtcp_handle_close_cb);
+    se->rtcp_handle_status = HANDLE_CLOSING;
 init_rtcp_handle_failed:
     session_destroy(se);
     return NULL;

@@ -25,6 +25,11 @@ static pthread_mutex_t rtcp_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int rtcp_interval = 1500;  // ms
 static pthread_t send_thread = 0;
 
+void rtcp_handle_close_cb(uv_handle_t *handle)
+{
+    container_of((uv_udp_t*)handle, struct session, rtcp_handle)->rtcp_handle_status = HANDLE_CLOSED;
+}
+
 static void clean_up(void *arg)
 {
     struct session *se = NULL;
@@ -57,7 +62,15 @@ static void clean_up(void *arg)
         se = list_first_entry(&rtcp_list, struct session, rtcp_list);
         list_del(&se->rtcp_list);
         uv_udp_recv_stop(&se->rtcp_handle);
+        se->rtcp_handle_status = HANDLE_CLOSED;
         // TODO: set se->status to SESSION_IDEL ??
+        /*
+         * TODO: close se->rtcp_handle in correct way. In this code, rtcp_handle_close_cb will not be called
+        if ((se->rtcp_handle_status != HANDLE_CLOSING) && (se->rtcp_handle_status != HANDLE_CLOSED)) {
+            uv_close((uv_handle_t*)&se->rtcp_handle, rtcp_handle_close_cb);
+            se->rtcp_handle_status = HANDLE_CLOSING;
+        }
+        */
     }
     pthread_mutex_unlock(&rtcp_list_mutex);
 
