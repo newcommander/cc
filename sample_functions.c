@@ -4,7 +4,6 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
 
-#include "ccstream.h"
 #include "uri.h"
 
 static int sampling(void *_frame, int screen_w, int screen_h);
@@ -15,8 +14,6 @@ struct uri_entry entrys[] = {
     { "lala", "trackID=1", 600, 400, 25, lala },
     { NULL, NULL, 0, 0, 0, NULL }
 };
-
-struct stream_arg g_show;
 
 static int sampling(void *_frame, int screen_w, int screen_h)
 {

@@ -6,8 +6,6 @@ struct stream_arg {
     int dim[4];
 };
 
-struct stream_arg g_show;
-
 void *cc_stream(void *arg);
 
 #endif /* CCSTREAM_H */

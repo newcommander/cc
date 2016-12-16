@@ -40,7 +40,7 @@ void del_uri(struct Uri *uri);
 struct Uri* find_uri(char *url);
 int ref_uri(struct session *se);
 int unref_uri(struct session *se);
-void uris_init();
+void uris_init(struct uri_entry *entrys);
 void uris_deinit();
 
 #endif /* URI_H */

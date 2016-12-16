@@ -10,9 +10,8 @@
 struct list_head uri_list;
 static pthread_mutex_t uri_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-extern struct uri_entry entrys[];
-char active_addr[128];
-char base_url[1024];
+extern char active_addr[];
+extern char base_url[];
 
 #define CONFIG_BUF_SIZE 2048
 int make_sdp_string(struct Uri *uri, char *encoder_name)
@@ -261,7 +260,7 @@ int unref_uri(struct session *se)
     return 0;
 }
 
-void uris_init()
+void uris_init(struct uri_entry *entrys)
 {
     struct uri_entry *ue = NULL;
     int ret = 0;

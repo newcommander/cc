@@ -214,7 +214,12 @@ void *cc_stream(void *arg)
     struct evconnlistener *listener = NULL;
     struct event *signal_event = NULL;
     struct sockaddr_in sin;
-    char *nic_name = (char*)arg;
+    char *nic_name = NULL;
+
+    if (!arg) {
+        printf("%s: Invalid parameter\n", __func__);
+        return NULL;
+    }
 
     cc_status = CC_IN_INIT;
 
@@ -227,7 +232,7 @@ void *cc_stream(void *arg)
     strncat(base_url, active_addr, strlen(active_addr));
 
     register_encoders();
-    uris_init(base_url);
+    uris_init((struct uri_entry*)arg);
     session_list_init();
 
     base = event_base_new();
