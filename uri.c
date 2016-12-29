@@ -70,10 +70,10 @@ int make_sdp_string(struct Uri *uri, char *encoder_name)
     }
     strncat(media_attr2, "\r\n", 2);
 
-    snprintf(media_attr3, sizeof(media_attr3), "a=framerate:%d\r\n", uri->framerate);
-    snprintf(media_attr4, sizeof(media_attr4), "a=framesize:96 %d-%d\r\n", uri->width, uri->height);
+    snprintf(media_attr3, sizeof(media_attr3), "a=framerate:%d\r\n", uri->entry->framerate);
+    snprintf(media_attr4, sizeof(media_attr4), "a=framesize:96 %d-%d\r\n", uri->entry->screen_w, uri->entry->screen_h);
     tmp_str = strdup(uri->url);
-    snprintf(media_attr5, sizeof(media_attr5), "a=control:%s/%s\r\n", basename(tmp_str), uri->track);
+    snprintf(media_attr5, sizeof(media_attr5), "a=control:%s/%s\r\n", basename(tmp_str), uri->entry->track);
     free(tmp_str);
 
     sdp_str = (char*)calloc(strlen(version) + strlen(origin) + strlen(session_name) +
@@ -154,12 +154,7 @@ int add_uri(struct uri_entry *ue)
     pthread_mutex_init(&uri->user_list_mutex, NULL);
     uri->user_num = 0;
     uri->ssrc = (uint32_t)rand();
-    uri->width = ue->screen_w;
-    uri->height = ue->screen_h;
-    uri->framerate = ue->framerate;
-    uri->track = ue->track;
-    uri->sample_mutex = ue->sample_mutex;
-    uri->sample_func = ue->sample_func;
+    pthread_rwlock_init(uri->entry->sample_lock, NULL);
     if (make_sdp_string(uri, "mpeg4") < 0) {
         printf("%s: failed making mpeg4 sdp string\n", __func__);
         free(uri->url);
@@ -196,6 +191,8 @@ void del_uri(struct Uri *uri)
         session_destroy(se);
     }
     pthread_mutex_unlock(&uri->user_list_mutex);
+
+    pthread_rwlock_destroy(uri->entry->sample_lock);
 
     if (uri->url)
         free(uri->url);

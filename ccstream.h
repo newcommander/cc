@@ -1,7 +1,7 @@
 #ifndef CCSTREAM_H
 #define CCSTREAM_H
 
-struct stream_arg {
+struct stream_source {
     void *data;
     int dim[4];
 };

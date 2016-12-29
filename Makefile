@@ -23,6 +23,7 @@ all: $(OBJ)
 
 example: $(EXAMPLE_OBJ)
 	$(CC) $(LINK) $(EXAMPLE_OBJ) $(LFLAGS) -lccstream -o main
+	rm -f *.o
 
 install:
 	cp -f $(TARGET) /usr/lib/

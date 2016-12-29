@@ -6,7 +6,18 @@
 
 #include "list.h"
 
-typedef int (*sample_function)(void *_frame, pthread_mutex_t *sample_mutex, int screen_w, int screen_h);
+typedef int (*sample_function)(void *_frame, void *arg);
+
+struct uri_entry {
+    char *title;
+    char *track;
+    int screen_w;
+    int screen_h;
+    int framerate;
+    void *source;
+    sample_function sample_func;
+    pthread_rwlock_t *sample_lock;
+};
 
 struct Uri {
     struct list_head list;
@@ -17,22 +28,7 @@ struct Uri {
     char *sdp_str_mpeg4;
     char *sdp_str_h264;
     char *url;
-    char *track;
-    int width;
-    int height;
-    int framerate;
-    pthread_mutex_t *sample_mutex;
-    sample_function sample_func;
-};
-
-struct uri_entry {
-    char *title;
-    char *track;
-    int screen_w;
-    int screen_h;
-    int framerate;
-    pthread_mutex_t *sample_mutex;
-    sample_function sample_func;
+    struct uri_entry *entry;
 };
 
 #include "session.h"
