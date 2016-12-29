@@ -65,7 +65,7 @@ int sample_frame(struct session *se, unsigned char *out_buf, int *out_buf_len)
     }
 
     se->frame->pts = se->pts;
-    if (se->uri->sample_func(se->frame, se->uri->width, se->uri->height) < 0) {
+    if (se->uri->sample_func(se->frame, se->uri->sample_mutex, se->uri->width, se->uri->height) < 0) {
         printf("%s: Sampling frame failed: [URI: %s, session id: %s]\n", __func__, se->uri->url, se->session_id);
         return -1;
     }

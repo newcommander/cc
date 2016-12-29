@@ -6,7 +6,7 @@
 
 #include "list.h"
 
-typedef int (*sample_function)(void *_frame, int screen_w, int screen_h);
+typedef int (*sample_function)(void *_frame, pthread_mutex_t *sample_mutex, int screen_w, int screen_h);
 
 struct Uri {
     struct list_head list;
@@ -21,6 +21,7 @@ struct Uri {
     int width;
     int height;
     int framerate;
+    pthread_mutex_t *sample_mutex;
     sample_function sample_func;
 };
 
@@ -30,6 +31,7 @@ struct uri_entry {
     int screen_w;
     int screen_h;
     int framerate;
+    pthread_mutex_t *sample_mutex;
     sample_function sample_func;
 };
 

@@ -158,6 +158,7 @@ int add_uri(struct uri_entry *ue)
     uri->height = ue->screen_h;
     uri->framerate = ue->framerate;
     uri->track = ue->track;
+    uri->sample_mutex = ue->sample_mutex;
     uri->sample_func = ue->sample_func;
     if (make_sdp_string(uri, "mpeg4") < 0) {
         printf("%s: failed making mpeg4 sdp string\n", __func__);

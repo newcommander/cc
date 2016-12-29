@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <pthread.h>
 
 #include <libavutil/opt.h>
 #include <libavcodec/avcodec.h>
@@ -6,21 +7,24 @@
 
 #include "uri.h"
 
-static int sampling(void *_frame, int screen_w, int screen_h);
-static int lala(void *_frame, int screen_w, int screen_h);
+static int sampling(void *_frame, pthread_mutex_t *sample_mutex, int screen_w, int screen_h);
+static int lala(void *_frame, pthread_mutex_t *sample_mutex, int screen_w, int screen_h);
+
+static pthread_mutex_t sampling_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t lala_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct uri_entry entrys[] = {
-    { "sample", "trackID=1", 600, 400, 25, sampling },
-    { "lala", "trackID=1", 600, 400, 25, lala },
+    { "sample", "trackID=1", 600, 800, 25, &sampling_mutex, sampling },
+    { "lala", "trackID=1", 600, 400, 25, &lala_mutex, lala },
     { NULL, NULL, 0, 0, 0, NULL }
 };
 
-static int sampling(void *_frame, int screen_w, int screen_h)
+static int sampling(void *_frame, pthread_mutex_t *sample_mutex, int screen_w, int screen_h)
 {
     AVFrame *frame = (AVFrame*)_frame;
     uint8_t *data = NULL;
     int object_w, object_h, channle, num;
-    int x, y;
+    int width, high, y;
 
     if (!frame || screen_w <= 0 || screen_h <= 0) {
         printf("%s: Invalid parameter\n", __func__);
@@ -33,36 +37,23 @@ static int sampling(void *_frame, int screen_w, int screen_h)
     channle    = g_show.dim[2];
     num        = g_show.dim[3];
 
-    if (object_w > screen_w || object_h > screen_h) {
-        printf("%s: Screen too small\n", __func__);
-        return -1;
-    }
+    // clear screen
+    memset(frame->data[0], 0, screen_h * frame->linesize[0]);      // Y
+    memset(frame->data[1], 128, screen_h/2 * frame->linesize[1]);  // Cb
+    memset(frame->data[2], 128, screen_h/2 * frame->linesize[2]);  // Cr
 
-    /* Y */
-    for (y = 0; y < screen_h; y++) {
-        for (x = 0; x < screen_w; x++) {
-            frame->data[0][y * frame->linesize[0] + x] = 0;
-        }
-    }
-    /* Cb and Cr */
-    for (y = 0; y < screen_h / 2; y++) {
-        for (x = 0; x < screen_w / 2; x++) {
-            frame->data[1][y * frame->linesize[1] + x] = 128;
-            frame->data[2][y * frame->linesize[2] + x] = 128;
-        }
-    }
+    high = screen_h > object_h ? object_h : screen_h;
+    width = screen_w > object_w ? object_w : screen_w;
 
-    for (y = 0; y < object_h; y++) {
-        for (x = 0; x < object_w; x++) {
-            //frame->data[0][y * frame->linesize[0] + x] = data[object_w * y + x];
-            frame->data[0][y * frame->linesize[0] + x] = frame->pts % 255;
-        }
-    }
+    pthread_mutex_lock(sample_mutex);
+    for (y = 0; y < high; y++)
+        memcpy(frame->data[0] + y * frame->linesize[0], data + y * object_w, width);
+    pthread_mutex_unlock(sample_mutex);
 
     return 0;
 }
 
-static int lala(void *_frame, int screen_w, int screen_h)
+static int lala(void *_frame, pthread_mutex_t *sample_mutex, int screen_w, int screen_h)
 {
     int unit_h, unit_w;
     int num, channle, i, j, x, y, units_in_line;
@@ -89,6 +80,7 @@ static int lala(void *_frame, int screen_w, int screen_h)
         }
     }
 
+    pthread_mutex_lock(sample_mutex);
     for (i = 0; i < num; i++) {
         j = i % units_in_line;
         i = i / units_in_line;
@@ -99,6 +91,7 @@ static int lala(void *_frame, int screen_w, int screen_h)
         }
         i = i * units_in_line + j;
     }
+    pthread_mutex_unlock(sample_mutex);
 
     return 0;
 }
