@@ -5,19 +5,7 @@
 #include <stdint.h>
 
 #include "list.h"
-
-typedef int (*sample_function)(void *_frame, void *arg);
-
-struct uri_entry {
-    char *title;
-    char *track;
-    int screen_w;
-    int screen_h;
-    int framerate;
-    void *source;
-    sample_function sample_func;
-    pthread_rwlock_t *sample_lock;
-};
+#include "ccstream.h"
 
 struct Uri {
     struct list_head list;
@@ -28,7 +16,13 @@ struct Uri {
     char *sdp_str_mpeg4;
     char *sdp_str_h264;
     char *url;
-    struct uri_entry *entry;
+    char *title;
+    char *track;
+    int screen_w;
+    int screen_h;
+    int framerate;
+    void *data;
+    sample_function sample_func;
 };
 
 #include "session.h"

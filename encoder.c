@@ -59,13 +59,13 @@ static int encode_frame(AVCodecContext *cc, AVFrame *frame, unsigned char *out_b
 
 int sample_frame(struct session *se, unsigned char *out_buf, int *out_buf_len)
 {
-    if (!se || !se->uri || !se->uri->entry->sample_func) {
+    if (!se || !se->uri || !se->uri->sample_func) {
         printf("%s: Invalid parameter\n", __func__);
         return -1;
     }
 
     se->frame->pts = se->pts;
-    if (se->uri->entry->sample_func(se->frame, se->uri->entry) < 0) {
+    if (se->uri->sample_func(se->frame, se->uri->screen_h, se->uri->screen_w, se->uri->data) < 0) {
         printf("%s: Sampling frame failed: [URI: %s, session id: %s]\n", __func__, se->uri->url, se->session_id);
         return -1;
     }
@@ -119,11 +119,11 @@ int encoder_init(struct session *se)
     }
 
     /* frames per second */
-    se->cc->time_base = (AVRational){1, se->uri->entry->framerate};
+    se->cc->time_base = (AVRational){1, se->uri->framerate};
     se->cc->bit_rate = 400000;
     /* resolution must be a multiple of two */
-    se->cc->width = se->uri->entry->screen_w;
-    se->cc->height = se->uri->entry->screen_h;
+    se->cc->width = se->uri->screen_w;
+    se->cc->height = se->uri->screen_h;
     /* emit one intra frame every ten frames
      * check frame pict_type before passing frame
      * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I

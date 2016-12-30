@@ -2,8 +2,8 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "common.h"
-#include "ccstream.h"
+#include "../common.h"
+#include "../ccstream.h"
 
 #include "sample_functions.c"
 

@@ -23,7 +23,6 @@ static uv_loop_t rtp_loop;
 static uv_timer_t loop_alarm;
 static struct list_head rtp_list;
 static pthread_mutex_t rtp_list_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int rtp_interval = 40;  // ms
 static pthread_t send_thread = 0;
 
 void rtp_handle_close_cb(uv_handle_t *handle)
@@ -172,6 +171,8 @@ static void* send_dispatch(void *arg)
     ssize_t size = 0;
     int retry = 0, len = 0, n = 0, over_time;
     unsigned char data[PACKET_BUFFER_SIZE];
+    //int rtp_interval = 1000 / ((struct Uri*)arg)->framerate;
+    int rtp_interval = 40;  // init to 25 fps
 
     memset(&h, 0, sizeof(struct msghdr));
     h.msg_namelen = sizeof(struct sockaddr_in);
@@ -184,6 +185,7 @@ static void* send_dispatch(void *arg)
         pthread_mutex_lock(&rtp_list_mutex);
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
         list_for_each_entry(se, &rtp_list, rtp_list) { // send packet in each session
+            rtp_interval = 1000 / se->uri->framerate;  // FIXME: split uris into different send thread
             se->rtp_pkt.header = ntohl(se->rtp_pkt.header);
             set_seq_num(&se->rtp_pkt, se->rtp_seq_num++);
             se->rtp_pkt.header = htonl(se->rtp_pkt.header);
