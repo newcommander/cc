@@ -1,31 +1,62 @@
+#define __STDC_CONSTANT_MACROS
+
 #include <string>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 
+extern "C" {
+#include <stdint.h>
+#include <libavutil/opt.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/imgutils.h>
 #include <pthread.h>
 #include <string.h>
 #include <stdio.h>
-
-#define w 640
-
-extern "C" {
-#include "../common.h"
 #include "../ccstream.h"
 }
 
-int sampling(void *_frame, int screen_h, int screen_w, void *arg)
+#define OPENCV_W 640
+#define OPENCV_H 600
+
+int opencv_draw(void *_frame, int screen_h, int screen_w, void *arg)
 {
-    return 0;
+    AVFrame *frame = (AVFrame*)_frame;
+    struct stream_source *stream_src = (struct stream_source*)arg;
+	cv::Mat *image = NULL;
+    int object_w, object_h;
+    //int channle, num;
+    int width, height, y, x;
+
+	if (!frame || !stream_src || !stream_src->data) {
+        printf("%s: Invalid parameter\n", __func__);
+		return -1;
+	}
+
+	image = (cv::Mat*)stream_src->data;
+    object_w = stream_src->dim[0];
+    object_h = stream_src->dim[1];
+    //channle = stream_src->dim[2];
+    //num = stream_src->dim[3];
+
+    width  = screen_w > object_w ? object_w : screen_w;
+    height = screen_h > object_h ? object_h : screen_h;
+	printf("w=%d, h=%d\n", object_w, object_h);
+
+    pthread_rwlock_rdlock(&stream_src->sample_lock);
+    for (y = 0; y < height; y++)
+		for (x = 0; x < width; x++)
+			frame->data[y * frame->linesize[0] + x] = (uint8_t*)image->data + y * object_h * 3 + x * 3;
+//        memcpy(frame->data[0] + y * frame->linesize[0], (uint8_t*)stream_src->data + y * object_w, width);
+    pthread_rwlock_unlock(&stream_src->sample_lock);
+
+	return 0;
 }
 
 struct uri_entry entrys[] = {
-    { "sample", "trackID=1", 600, 640, 30, NULL, sampling },
-    { "lala", "trackID=1", 600, 400, 30, NULL, lala },
+    { "opencv", "trackID=1", OPENCV_W, OPENCV_H, 30, NULL, opencv_draw },
     { NULL, NULL, 0, 0, 0, NULL, NULL }
 };
-
-unsigned char show_data[640 * 640];
 
 void MyEllipse( cv::Mat img, double angle )
 {
@@ -33,8 +64,8 @@ void MyEllipse( cv::Mat img, double angle )
   int lineType = 8;
 
   cv::ellipse( img,
-       cv::Point( w/2, w/2 ),
-       cv::Size( w/4, w/16 ),
+       cv::Point( OPENCV_W/2, OPENCV_H/2 ),
+       cv::Size( OPENCV_W/4, OPENCV_H/16 ),
        angle,
        0,
        360,
@@ -47,16 +78,15 @@ int main(int argc, char **argv)
 {
     struct stream_source stream_src;
     pthread_t t;
-    unsigned int i, x;
-    cv::Mat image = cv::Mat::eye(w, w, CV_8UC3);
+
+	cv::Mat image = cv::Mat::eye(OPENCV_W, OPENCV_H, CV_8UC3);
     printf("rows=%d, cols=%d\n", image.rows, image.cols);
     printf("dims=%d, step1=%lu, step2=%lu\n", image.dims, image.step[0], image.step[1]);
     MyEllipse(image, 0);
 
-    stream_src.data = image.data;
-    //stream_src.data = show_data;
-    stream_src.dim[0] = 640;
-    stream_src.dim[1] = 640;
+    stream_src.data = &image;
+    stream_src.dim[0] = OPENCV_W;
+    stream_src.dim[1] = OPENCV_H;
     stream_src.dim[2] = 1;
     stream_src.dim[3] = 1;
     pthread_rwlock_init(&stream_src.sample_lock, NULL);
@@ -65,16 +95,6 @@ int main(int argc, char **argv)
     if (pthread_create(&t, NULL, cc_stream, entrys) != 0) {
         printf("%s: Creating cc_stream thread failed", __func__);
         return -1;
-    }
-
-    // then modify the memory of show_data, cc_stream will sample it every interval time
-    for (i = 0; 1; i++) {
-        pthread_rwlock_wrlock(&stream_src.sample_lock);
-        memset(show_data, 0, stream_src.dim[0] * stream_src.dim[1] * stream_src.dim[2] * stream_src.dim[3]);
-        for (x = 0; x < stream_src.dim[0]; x++)
-            show_data[((x + i) % stream_src.dim[1]) * stream_src.dim[0] + x] = 255;
-        pthread_rwlock_unlock(&stream_src.sample_lock);
-        msleep(50);
     }
 
     pthread_join(t, NULL);

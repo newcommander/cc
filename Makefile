@@ -10,7 +10,8 @@ LFLAGS=-lavcodec -lavformat -lswresample -lavutil -pthread \
 	   -levent_core -luv -lopencv_imgproc -lz -lrt -lm
 
 OBJ=uri.o rtp.o rtcp.o session.o encoder.o rtsp.o ccstream.o
-EXAMPLE_OBJ=$(EXAMPLE_DIR)/main.o $(EXAMPLE_DIR)/sample_functions.o
+#EXAMPLE_OBJ=$(EXAMPLE_DIR)/main.o $(EXAMPLE_DIR)/sample_functions.o
+EXAMPLE_OBJ=$(EXAMPLE_DIR)/opencv.o
 EXAMPLE_TARGET=$(EXAMPLE_DIR)/run
 
 TARGET=libccstream.so
