@@ -16,8 +16,8 @@ struct Uri {
     char *sdp_str_mpeg4;
     char *sdp_str_h264;
     char *url;
-    char *title;
-    char *track;
+    const char *title;
+    const char *track;
     int screen_w;
     int screen_h;
     int framerate;

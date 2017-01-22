@@ -1,14 +1,17 @@
 #include <stdio.h>
+#include <pthread.h>
 
+#include "../ccstream.h"
 #include <libavutil/opt.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
 
-static int sampling(void *_frame, int screen_h, int screen_w, void *arg)
+int sampling(void *_frame, int screen_h, int screen_w, void *arg)
 {
     AVFrame *frame = (AVFrame*)_frame;
     struct stream_source *src = (struct stream_source*)arg;
-    int object_w, object_h, channle, num;
+    int object_w, object_h;
+    //int channle, num;
     int width, height, y;
 
     if (!frame || !src || !src->data) {
@@ -17,8 +20,8 @@ static int sampling(void *_frame, int screen_h, int screen_w, void *arg)
     }
     object_w = src->dim[0];
     object_h = src->dim[1];
-    channle = src->dim[2];
-    num = src->dim[3];
+    //channle = src->dim[2];
+    //num = src->dim[3];
 
     // clear screen
     //memset(frame->data[0], 0, screen_h * frame->linesize[0]);      // Y
@@ -36,11 +39,12 @@ static int sampling(void *_frame, int screen_h, int screen_w, void *arg)
     return 0;
 }
 
-static int lala(void *_frame, int screen_h, int screen_w, void *arg)
+int lala(void *_frame, int screen_h, int screen_w, void *arg)
 {
     AVFrame *frame = (AVFrame*)_frame;
     struct stream_source *src = (struct stream_source*)arg;
-    int object_w, object_h, channle, num;
+    int object_w, object_h;
+    //int channle, num;
     int width, height, y;
 
     if (!frame || !src || !src->data) {
@@ -49,8 +53,8 @@ static int lala(void *_frame, int screen_h, int screen_w, void *arg)
     }
     object_w = src->dim[0];
     object_h = src->dim[1];
-    channle = src->dim[2];
-    num = src->dim[3];
+    //channle = src->dim[2];
+    //num = src->dim[3];
 
     // clear screen
     //memset(frame->data[0], 0, screen_h * frame->linesize[0]);      // Y

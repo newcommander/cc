@@ -1,12 +1,23 @@
+#include <string>
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
+
 #include <pthread.h>
 #include <string.h>
 #include <stdio.h>
 
+#define w 640
+
+extern "C" {
 #include "../common.h"
 #include "../ccstream.h"
+}
 
-extern int sampling(void *_frame, int screen_h, int screen_w, void *arg);
-extern int lala(void *_frame, int screen_h, int screen_w, void *arg);
+int sampling(void *_frame, int screen_h, int screen_w, void *arg)
+{
+    return 0;
+}
 
 struct uri_entry entrys[] = {
     { "sample", "trackID=1", 600, 640, 30, NULL, sampling },
@@ -16,13 +27,34 @@ struct uri_entry entrys[] = {
 
 unsigned char show_data[640 * 640];
 
+void MyEllipse( cv::Mat img, double angle )
+{
+  int thickness = 2;
+  int lineType = 8;
+
+  cv::ellipse( img,
+       cv::Point( w/2, w/2 ),
+       cv::Size( w/4, w/16 ),
+       angle,
+       0,
+       360,
+       cv::Scalar( 255, 0, 0 ),
+       thickness,
+       lineType );
+}
+
 int main(int argc, char **argv)
 {
     struct stream_source stream_src;
     pthread_t t;
     unsigned int i, x;
+    cv::Mat image = cv::Mat::eye(w, w, CV_8UC3);
+    printf("rows=%d, cols=%d\n", image.rows, image.cols);
+    printf("dims=%d, step1=%lu, step2=%lu\n", image.dims, image.step[0], image.step[1]);
+    MyEllipse(image, 0);
 
-    stream_src.data = show_data;
+    stream_src.data = image.data;
+    //stream_src.data = show_data;
     stream_src.dim[0] = 640;
     stream_src.dim[1] = 640;
     stream_src.dim[2] = 1;

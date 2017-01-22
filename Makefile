@@ -2,14 +2,16 @@ INCLUDE=-I/root/work/stream/output/include
 LINK=-L/root/work/stream/output/lib -L.
 EXAMPLE_DIR=example
 
-CC=gcc
-CFLAGS=-g -Wall -fPIC -pthread
+CC=/usr/local/gcc-4.8.2/bin/gcc
+CXX=/usr/local/gcc-4.8.2/bin/g++
+CFLAGS=-c -g -Wall -fPIC -pthread
+CXXFLAGS=-c -g -Wall -fPIC -pthread
 LFLAGS=-lavcodec -lavformat -lswresample -lavutil -pthread \
-	   -lz -lrt -lm -levent_core -luv
+	   -levent_core -luv -lopencv_imgproc -lz -lrt -lm
 
 OBJ=uri.o rtp.o rtcp.o session.o encoder.o rtsp.o ccstream.o
-EXAMPLE_OBJ=$(EXAMPLE_DIR)/main.o
-EXAMPLE_TARGET=$(EXAMPLE_DIR)/main
+EXAMPLE_OBJ=$(EXAMPLE_DIR)/main.o $(EXAMPLE_DIR)/sample_functions.o
+EXAMPLE_TARGET=$(EXAMPLE_DIR)/run
 
 TARGET=libccstream.so
 INSTALL_DIR=/usr/lib64/
@@ -17,7 +19,10 @@ INSTALL_DIR=/usr/lib64/
 .PHONY: all example install unstall clean
 
 %.o: %.c
-	$(CC) $(INCLUDE) $(CFLAGS) -c $< -o $@
+	$(CC) $(INCLUDE) $(CFLAGS) $< -o $@
+
+%.o: %.cpp
+	$(CXX) $(INCLUDE) $(CXXFLAGS) $< -o $@
 
 all: $(OBJ)
 	$(CC) $(LINK) $(OBJ) $(LFLAGS) -shared -o $(TARGET)

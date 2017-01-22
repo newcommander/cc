@@ -4,8 +4,8 @@
 typedef int (*sample_function)(void *_frame, int screen_h, int screen_w, void *arg);
 
 struct uri_entry {
-    char *title;
-    char *track;
+    const char *title;
+    const char *track;
     int screen_w;
     int screen_h;
     int framerate;
@@ -16,7 +16,7 @@ struct uri_entry {
 struct stream_source {
     pthread_rwlock_t sample_lock;
     void *data;
-    int dim[4];
+    unsigned int dim[4];
 };
 
 void *cc_stream(void *arg);
