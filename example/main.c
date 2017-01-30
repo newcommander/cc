@@ -9,7 +9,7 @@ extern int sampling(void *_frame, int screen_h, int screen_w, void *arg);
 extern int lala(void *_frame, int screen_h, int screen_w, void *arg);
 
 struct uri_entry entrys[] = {
-    { "sample", "trackID=1", 600, 640, 30, NULL, sampling },
+    { "example", "trackID=1", 600, 640, 30, NULL, sampling },
     { "lala", "trackID=1", 600, 400, 30, NULL, lala },
     { NULL, NULL, 0, 0, 0, NULL, NULL }
 };

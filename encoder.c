@@ -132,7 +132,7 @@ int encoder_init(struct session *se)
      */
     se->cc->ticks_per_frame = 1;
     se->cc->gop_size = 10;
-    se->cc->max_b_frames = 0;
+    se->cc->max_b_frames = 1;
     se->cc->pix_fmt = AV_PIX_FMT_YUV420P;
 
     se->cc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;

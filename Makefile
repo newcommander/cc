@@ -6,18 +6,20 @@ CC=/usr/local/gcc-4.8.2/bin/gcc
 CXX=/usr/local/gcc-4.8.2/bin/g++
 CFLAGS=-c -g -Wall -fPIC -pthread
 CXXFLAGS=-c -g -Wall -fPIC -pthread
-LFLAGS=-lavcodec -lavformat -lswresample -lavutil -pthread \
+LFLAGS=-lavcodec -lavformat -lswresample -lavutil -lswscale -pthread \
 	   -levent_core -luv -lopencv_imgproc -lz -lrt -lm
 
 OBJ=uri.o rtp.o rtcp.o session.o encoder.o rtsp.o ccstream.o
-#EXAMPLE_OBJ=$(EXAMPLE_DIR)/main.o $(EXAMPLE_DIR)/sample_functions.o
-EXAMPLE_OBJ=$(EXAMPLE_DIR)/opencv.o
-EXAMPLE_TARGET=$(EXAMPLE_DIR)/run
+EXAMPLE_OBJ=$(EXAMPLE_DIR)/main.o $(EXAMPLE_DIR)/sample_functions.o
+OPENCV_OBJ=$(EXAMPLE_DIR)/opencv.o
 
 TARGET=libccstream.so
+EXAMPLE_TARGET=$(EXAMPLE_DIR)/example
+OPENCV_TARGET=$(EXAMPLE_DIR)/opencv
+
 INSTALL_DIR=/usr/lib64/
 
-.PHONY: all example install unstall clean
+.PHONY: all example opencv install unstall clean
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(CFLAGS) $< -o $@
@@ -33,6 +35,10 @@ example: $(EXAMPLE_OBJ)
 	$(CC) $(LINK) $(EXAMPLE_OBJ) $(LFLAGS) -lccstream -o $(EXAMPLE_TARGET)
 	rm -f $(EXAMPLE_OBJ)
 
+opencv: $(OPENCV_OBJ)
+	$(CC) $(LINK) $(OPENCV_OBJ) $(LFLAGS) -lccstream -o $(OPENCV_TARGET)
+	rm -f $(OPENCV_OBJ)
+
 install:
 	cp -f $(TARGET) /usr/lib/
 	cp -f $(TARGET) /usr/lib64/
@@ -42,4 +48,4 @@ unstall:
 	rm -f /use/lib64/$(TARGET)
 
 clean:
-	rm -f $(OBJ) $(EXAMPLE_OBJ) $(TARGET) $(EXAMPLE_TARGET)
+	rm -f $(OBJ) $(EXAMPLE_OBJ) $(OPENCV_OBJ) $(TARGET) $(EXAMPLE_TARGET) $(OPENCV_TARGET)
