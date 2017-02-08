@@ -18,12 +18,12 @@ extern "C" {
 #include "../common.h"
 }
 
-#define SCREEN_W 1366
-#define SCREEN_H 768
+#define SCREEN_W 600
+#define SCREEN_H 400
 
-static int opencv_draw(void *_frame, int screen_h, int screen_w, void *arg);
+static int opencv_sampling(void *_frame, int screen_h, int screen_w, void *arg);
 static struct uri_entry entrys[] = {
-    { "opencv", "trackID=1", SCREEN_W, SCREEN_H, 30, NULL, opencv_draw },
+    { "opencv", "trackID=1", SCREEN_W, SCREEN_H, 30, NULL, opencv_sampling },
     { NULL, NULL, 0, 0, 0, NULL, NULL }
 };
 
@@ -33,7 +33,25 @@ static int src_linesize[4];
 static uint8_t *dst_data[4];
 static int dst_linesize[4];
 
-static int opencv_draw(void *_frame, int screen_h, int screen_w, void *arg)
+static double angle;
+
+static void init_variables(void)
+{
+	angle = 0;
+}
+
+static void opencv_draw(cv::Mat img)
+{
+	int thickness = 2;
+	int lineType = cv::LINE_AA;
+
+	//cv::rectangle(img, cv::Point(0, 0), cv::Point(img.cols, img.rows), cv::Scalar(173, 121, 54), -1);
+	cv::ellipse(img, cv::Point(img.cols/2, img.rows/2), cv::Size(img.cols/4, img.cols/16),
+			angle, 0, 360, cv::Scalar(0, 0, 192), thickness, lineType);
+	angle += 1;
+}
+
+static int opencv_sampling(void *_frame, int screen_h, int screen_w, void *arg)
 {
     AVFrame *frame = (AVFrame*)_frame;
     struct stream_source *stream_src = (struct stream_source*)arg;
@@ -67,36 +85,27 @@ static int opencv_draw(void *_frame, int screen_h, int screen_w, void *arg)
     return 0;
 }
 
-static void MyEllipse( cv::Mat img, double angle )
-{
-  int thickness = 2;
-  int lineType = 8;
-
-  cv::ellipse(img, cv::Point(img.cols/2, img.rows/2), cv::Size(img.cols/4, img.cols/16),
-          angle, 0, 360, cv::Scalar(0, 0, 256), thickness, lineType);
-}
-
 int main(int argc, char **argv)
 {
     struct stream_source stream_src;
     pthread_t t;
-    unsigned int i = 0;
+    int ret = -1;
 
     cv::Mat image = cv::Mat::eye(SCREEN_H, SCREEN_W, CV_8UC3);
 
     if (av_image_alloc(src_data, src_linesize, image.cols, image.rows, AV_PIX_FMT_BGR24, 16) < 0) {
         printf("alloc src image failed\n");
-        return -1;
+        return ret;
     }
     if (av_image_alloc(dst_data, dst_linesize, image.cols, image.rows, AV_PIX_FMT_YUV420P, 16) < 0) {
         printf("alloc dst image failed\n");
-        return -1;
+        goto alloc_dst_image_failed;
     }
 
     sws_ctx = sws_alloc_context();
     if (!sws_ctx) {
-        printf("sws_alloc_set_opts failed\n");
-        return -1;
+        printf("sws_alloc_context failed\n");
+        goto alloc_sws_contex_failed;
     }
 
     av_opt_set_int(sws_ctx, "sws_flag", SWS_BICUBLIN|SWS_PRINT_INFO, 0);
@@ -111,8 +120,7 @@ int main(int argc, char **argv)
 
     if (sws_init_context(sws_ctx, NULL, NULL) < 0) {
         printf("sws_init_context failed\n");
-        sws_freeContext(sws_ctx);
-        return -1;
+        goto init_sws_contex_failed;
     }
 
     stream_src.data = &image;
@@ -125,22 +133,29 @@ int main(int argc, char **argv)
 
     if (pthread_create(&t, NULL, cc_stream, entrys) != 0) {
         printf("%s: Creating cc_stream thread failed\n", __func__);
-        return -1;
+        goto create_cc_stream_thread_failed;
     }
 
+	init_variables();
     while (1) {
         pthread_rwlock_wrlock(&stream_src.sample_lock);
         image = cv::Mat::zeros(image.rows, image.cols, CV_8UC3);
-        MyEllipse(image, (i++)%360);
+        opencv_draw(image);
         pthread_rwlock_unlock(&stream_src.sample_lock);
         msleep(100);
     }
+    ret = 0;
 
     pthread_join(t, NULL);
-    pthread_rwlock_destroy(&stream_src.sample_lock);
-    sws_freeContext(sws_ctx);
-    av_freep(&src_data[0]);
-    av_freep(&dst_data[0]);
 
-    return 0;
+create_cc_stream_thread_failed:
+    pthread_rwlock_destroy(&stream_src.sample_lock);
+init_sws_contex_failed:
+    sws_freeContext(sws_ctx);
+alloc_sws_contex_failed:
+    av_freep(&dst_data[0]);
+alloc_dst_image_failed:
+    av_freep(&src_data[0]);
+
+    return ret;
 }
