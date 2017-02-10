@@ -1,12 +1,11 @@
 #define __STDC_CONSTANT_MACROS
 
-#include <string>
-#include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
+#include <opencv2/core.hpp>
+#include <sstream>
+#include <string>
 
 extern "C" {
-#include <stdint.h>
 #include <libavutil/opt.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
@@ -33,20 +32,25 @@ static int src_linesize[4];
 static uint8_t *dst_data[4];
 static int dst_linesize[4];
 
-static double angle;
+static int angle;
 
 static void init_variables(void)
 {
 	angle = 0;
 }
 
-static void opencv_draw(cv::Mat img)
+static void opencv_draw(cv::Mat image)
 {
 	int thickness = 2;
 	int lineType = cv::LINE_AA;
+	std::stringstream s;
+	cv::String text;
 
-	//cv::rectangle(img, cv::Point(0, 0), cv::Point(img.cols, img.rows), cv::Scalar(173, 121, 54), -1);
-	cv::ellipse(img, cv::Point(img.cols/2, img.rows/2), cv::Size(img.cols/4, img.cols/16),
+	s << "Angle=" << angle;
+	text += s.str();
+	//cv::rectangle(image, cv::Point(0, 0), cv::Point(image.cols, image.rows), cv::Scalar(173, 121, 54), -1);
+	cv::putText(image, text, cv::Point(10, 50), cv::FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar(173, 121, 54), 1, lineType, false);
+	cv::ellipse(image, cv::Point(image.cols/2, image.rows/2), cv::Size(image.cols/4, image.cols/16),
 			angle, 0, 360, cv::Scalar(0, 0, 192), thickness, lineType);
 	angle += 1;
 }
