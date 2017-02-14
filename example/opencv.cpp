@@ -68,15 +68,15 @@ static void init_variables(void)
 {
     int i;
 
-	insert_color_point(camera_aixs, cv::Point3d(1.0, 0.0,  0.0), cv::Scalar(0,     0, 255));
-	insert_color_point(camera_aixs, cv::Point3d(0.0, 0.0,  0.0), cv::Scalar(0,   255, 255));
-	insert_color_point(camera_aixs, cv::Point3d(0.0, 0.0, -1.0), cv::Scalar(255,   0, 255));
-	camera_pos = cv::Point3d(0.0, 0.0, 300.0);
+    insert_color_point(camera_aixs, cv::Point3d(1.0, 0.0,  0.0), cv::Scalar(0,     0, 255));
+    insert_color_point(camera_aixs, cv::Point3d(0.0, 1.0,  0.0), cv::Scalar(0,   255, 255));
+    insert_color_point(camera_aixs, cv::Point3d(0.0, 0.0, -1.0), cv::Scalar(255,   0, 255));
+    camera_pos = cv::Point3d(0.0, 0.0, 300.0);
 
-	for (i = 0; i < 3; i++)
+    for (i = 0; i < 3; i++)
         insert_color_point(world_aixs, world_aixs_data[i].coordinate, world_aixs_data[i].color);
 
-	for (i = 0; i < 4; i++)
+    for (i = 0; i < 4; i++)
         insert_color_point(g_obj, g_obj_data[i].coordinate, g_obj_data[i].color);
 }
 
@@ -84,16 +84,16 @@ static cv::Point3d rotating_on_x_aixs(cv::Point3d &point, double angle, double s
 {
     cv::Point3d new_point;
 
-	if (angle != 0.0) {
-		sin_angle = sin(angle);
-		cos_angle = cos(angle);
-	} else if (sin_angle != 0.0) {
-		cos_angle = sqrt(1 - (sin_angle * sin_angle));
-	} else if (cos_angle != 0.0) {
-		sin_angle = sqrt(1 - (cos_angle * cos_angle));
-	} else {
-		return point;
-	}
+    if (angle != 0.0) {
+        sin_angle = sin(angle);
+        cos_angle = cos(angle);
+    } else if (sin_angle != 0.0) {
+        cos_angle = sqrt(1 - (sin_angle * sin_angle));
+    } else if (cos_angle != 0.0) {
+        sin_angle = sqrt(1 - (cos_angle * cos_angle));
+    } else {
+        return point;
+    }
 
     new_point.x = point.x;
     new_point.y = point.y * cos_angle - point.z * sin_angle;
@@ -106,16 +106,16 @@ static cv::Point3d rotating_on_y_aixs(cv::Point3d &point, double angle, double s
 {
     cv::Point3d new_point;
 
-	if (angle != 0.0) {
-		sin_angle = sin(angle);
-		cos_angle = cos(angle);
-	} else if (sin_angle != 0.0) {
-		cos_angle = sqrt(1 - (sin_angle * sin_angle));
-	} else if (cos_angle != 0.0) {
-		sin_angle = sqrt(1 - (cos_angle * cos_angle));
-	} else {
-		return point;
-	}
+    if (angle != 0.0) {
+        sin_angle = sin(angle);
+        cos_angle = cos(angle);
+    } else if (sin_angle != 0.0) {
+        cos_angle = sqrt(1 - (sin_angle * sin_angle));
+    } else if (cos_angle != 0.0) {
+        sin_angle = sqrt(1 - (cos_angle * cos_angle));
+    } else {
+        return point;
+    }
 
     new_point.x = point.x * cos_angle + point.z * sin_angle;
     new_point.y = point.y;
@@ -128,16 +128,16 @@ static cv::Point3d rotating_on_z_aixs(cv::Point3d &point, double angle, double s
 {
     cv::Point3d new_point;
 
-	if (angle != 0.0) {
-		sin_angle = sin(angle);
-		cos_angle = cos(angle);
-	} else if (sin_angle != 0.0) {
-		cos_angle = sqrt(1 - (sin_angle * sin_angle));
-	} else if (cos_angle != 0.0) {
-		sin_angle = sqrt(1 - (cos_angle * cos_angle));
-	} else {
-		return point;
-	}
+    if (angle != 0.0) {
+        sin_angle = sin(angle);
+        cos_angle = cos(angle);
+    } else if (sin_angle != 0.0) {
+        cos_angle = sqrt(1 - (sin_angle * sin_angle));
+    } else if (cos_angle != 0.0) {
+        sin_angle = sqrt(1 - (cos_angle * cos_angle));
+    } else {
+        return point;
+    }
 
     new_point.x = point.x * cos_angle - point.y * sin_angle;
     new_point.y = point.x * sin_angle + point.y * cos_angle;
@@ -157,75 +157,77 @@ static cv::Point3d rotating_on_z_aixs(cv::Point3d &point, double angle, double s
 //       Z
 static cv::Point3d rotating_point(cv::Point3d &point, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
 {
-	cv::Point3d origined_aixs, origined_point, result_point(0.0, 0.0, 0.0);
-	cv::Point3d first_rotated_aixs, first_rotated_point, second_rotated_point;
-	//cv::Point3d second_rotated_aixs;
-	double mod_xz, mod_yz;
+    cv::Point3d origined_aixs, origined_point, result_point(0.0, 0.0, 0.0);
+    cv::Point3d first_rotated_aixs, first_rotated_point, second_rotated_point;
+    //cv::Point3d second_rotated_aixs;
+    double mod_xz, mod_yz;
 
-	// move to origin
-	origined_aixs = aixs_head - aixs_tail;
-	origined_point = point - aixs_tail;
+    // move to origin
+    origined_aixs = aixs_head - aixs_tail;
+    origined_point = point - aixs_tail;
 
-	if ((origined_aixs.y == 0.0) && (origined_aixs.z == 0.0)) {
-		origined_point = rotating_on_x_aixs(origined_point, angle, 0.0, 0.0);
-		result_point = origined_point + aixs_tail;
-		return result_point;
-	} else if ((origined_aixs.x == 0.0) && (origined_aixs.z == 0.0)) {
-		origined_point = rotating_on_y_aixs(origined_point, angle, 0.0, 0.0);
-		result_point = origined_point + aixs_tail;
-		return result_point;
-	} else if ((origined_aixs.x == 0.0) && (origined_aixs.y == 0.0)) {
-		origined_point = rotating_on_z_aixs(origined_point, angle, 0.0, 0.0);
-		result_point = origined_point + aixs_tail;
-		return result_point;
-	}
+    if ((origined_aixs.y == 0.0) && (origined_aixs.z == 0.0)) {
+        origined_point = rotating_on_x_aixs(origined_point, angle, 0.0, 0.0);
+        result_point = origined_point + aixs_tail;
+        return result_point;
+    } else if ((origined_aixs.x == 0.0) && (origined_aixs.z == 0.0)) {
+        origined_point = rotating_on_y_aixs(origined_point, angle, 0.0, 0.0);
+        result_point = origined_point + aixs_tail;
+        return result_point;
+    } else if ((origined_aixs.x == 0.0) && (origined_aixs.y == 0.0)) {
+        origined_point = rotating_on_z_aixs(origined_point, angle, 0.0, 0.0);
+        result_point = origined_point + aixs_tail;
+        return result_point;
+    }
 
-	// aixs rotating to XOZ plane
-	mod_yz = sqrt(origined_aixs.y * origined_aixs.y + origined_aixs.z * origined_aixs.z);
-	first_rotated_aixs = rotating_on_x_aixs(origined_aixs, 0.0, origined_aixs.y/mod_yz, 0.0);
-	first_rotated_point = rotating_on_x_aixs(origined_point, 0.0, origined_aixs.y/mod_yz, 0.0);
+    // aixs rotating to XOZ plane
+    mod_yz = sqrt(origined_aixs.y * origined_aixs.y + origined_aixs.z * origined_aixs.z);
+    first_rotated_aixs = rotating_on_x_aixs(origined_aixs, 0.0, origined_aixs.y/mod_yz, 0.0);
+    first_rotated_point = rotating_on_x_aixs(origined_point, 0.0, origined_aixs.y/mod_yz, 0.0);
 
-	// aixs rotating to coincide with Z aixs
-	mod_xz = sqrt(first_rotated_aixs.x * first_rotated_aixs.x + first_rotated_aixs.z * first_rotated_aixs.z);
-	//second_rotated_aixs = rotating_on_y_aixs(first_rotated_aixs, 0.0, -1 * first_rotated_aixs.x/mod_xz, 0.0);
-	second_rotated_point = rotating_on_y_aixs(first_rotated_point, 0.0, -1 * first_rotated_aixs.x/mod_xz, 0.0);
+    // aixs rotating to coincide with Z aixs
+    mod_xz = sqrt(first_rotated_aixs.x * first_rotated_aixs.x + first_rotated_aixs.z * first_rotated_aixs.z);
+    //second_rotated_aixs = rotating_on_y_aixs(first_rotated_aixs, 0.0, -1 * first_rotated_aixs.x/mod_xz, 0.0);
+    second_rotated_point = rotating_on_y_aixs(first_rotated_point, 0.0, -1 * first_rotated_aixs.x/mod_xz, 0.0);
 
-	// rotating on Z aixs
-	second_rotated_point = rotating_on_z_aixs(second_rotated_point, angle, 0.0, 0.0);
+    // rotating on Z aixs
+    second_rotated_point = rotating_on_z_aixs(second_rotated_point, angle, 0.0, 0.0);
 
-	// inverse rotating on Y aixs
-	first_rotated_point = rotating_on_y_aixs(second_rotated_point, 0.0, first_rotated_aixs.x/mod_xz, 0.0);
+    // inverse rotating on Y aixs
+    first_rotated_point = rotating_on_y_aixs(second_rotated_point, 0.0, first_rotated_aixs.x/mod_xz, 0.0);
 
-	// inverse rotating on X aixs
-	origined_point = rotating_on_x_aixs(first_rotated_point, 0.0, -1 * origined_aixs.y/mod_yz, 0.0);
+    // inverse rotating on X aixs
+    origined_point = rotating_on_x_aixs(first_rotated_point, 0.0, -1 * origined_aixs.y/mod_yz, 0.0);
 
-	// move back
-	result_point = origined_point + aixs_tail;
+    // move back
+    result_point = origined_point + aixs_tail;
 
-	return result_point;
+    return result_point;
 }
 
-static void rotating_object(Color_Points &object, double x_angle, double y_angle, double z_angle)
+static void rotating_object(Color_Points &object, Color_Points &output, bool in_place, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
 {
+    Color_Points *p;
     unsigned int i;
 
-	if (x_angle != 0.0)
-		for (i = 0; i < object.size(); i++)
-			object[i].first = rotating_on_x_aixs(object[i].first, x_angle, 0.0, 0.0);
+    if (in_place) {
+        p = &object;
+    } else {
+        output = object;
+        p = &output;
+    }
 
-	if (y_angle != 0.0)
-		for (i = 0; i < object.size(); i++)
-			object[i].first = rotating_on_y_aixs(object[i].first, y_angle, 0.0, 0.0);
+    if (angle == 0.0)
+        return;
 
-	if (z_angle != 0.0)
-		for (i = 0; i < object.size(); i++)
-			object[i].first = rotating_on_z_aixs(object[i].first, z_angle, 0.0, 0.0);
+    for (i = 0; i < (*p).size(); i++)
+        (*p)[i].first = rotating_point((*p)[i].first, aixs_head, aixs_tail, angle);
 }
 
 static void draw_aixs(cv::Mat &image, Color_Points &aixs)
 {
     cv::Point origin(image.cols/2, image.rows/2), head;
-    int lineType = cv::LINE_AA, thickness = 1, scale = 50;
+    int lineType = cv::LINE_AA, thickness = 1, scale = 100;
 
     if (aixs.size() < 3) {
         printf("%s(): Invalid parameter\n", __func__);
@@ -289,10 +291,11 @@ static void opencv_draw(cv::Mat &image)
 
     cv::rectangle(image, cv::Point(0, 0), cv::Point(image.cols, image.rows), cv::Scalar(86, 60, 27), -1);
 
-	rotating_object(world_aixs, PI/100, -PI/100, -PI/300);
-    draw_aixs(image, world_aixs);
+    rotating_object(world_aixs, output, false, world_aixs[0].first, cv::Point3d(0.0, 0.0, 0.0), PI/8);
+    rotating_object(output, output, false, output[1].first, cv::Point3d(0.0, 0.0, 0.0), -PI/8);
+    draw_aixs(image, output);
 
-    rotating_object(g_obj, PI/100, -PI/100, -PI/300);
+    rotating_object(g_obj, output, true, cv::Point3d(1.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, 0.0), PI/512);
     draw_obj(image, g_obj);
 
     s << "aixs_x=" << world_aixs[0].first;
@@ -348,17 +351,17 @@ static int opencv_sampling(void *_frame, int screen_h, int screen_w, void *arg)
 
 void temp_test()
 {
-	cv::Point3d a(1.0, 1.0, 1.0), b(0.0, 0.0, 0.0), c(0.0, 0.0, 0.0), d(0.0, 0.0, 0.0), e(0.0, 0.0, 0.0);
+    cv::Point3d a(1.0, 1.0, 1.0), b(0.0, 0.0, 0.0), c(0.0, 0.0, 0.0), d(0.0, 0.0, 0.0), e(0.0, 0.0, 0.0);
 
-	b = rotating_point(a, cv::Point3d(1.0, 0.001, 0.0), cv::Point3d(0.0, 0.0, 0.0), PI/4);
-	c = rotating_on_x_aixs(a, PI/4, 0.0, 0.0);
-	d = rotating_on_y_aixs(a, PI/4, 0.0, 0.0);
-	e = rotating_on_z_aixs(a, PI/4, 0.0, 0.0);
+    b = rotating_point(a, cv::Point3d(1.0, 0.001, 0.0), cv::Point3d(0.0, 0.0, 0.0), PI/4);
+    c = rotating_on_x_aixs(a, PI/4, 0.0, 0.0);
+    d = rotating_on_y_aixs(a, PI/4, 0.0, 0.0);
+    e = rotating_on_z_aixs(a, PI/4, 0.0, 0.0);
 
-	std::cout << "r:" << b << std::endl;
-	std::cout << "x:" << c << std::endl;
-	std::cout << "y:" << d << std::endl;
-	std::cout << "z:" << e << std::endl;
+    std::cout << "r:" << b << std::endl;
+    std::cout << "x:" << c << std::endl;
+    std::cout << "y:" << d << std::endl;
+    std::cout << "z:" << e << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -369,10 +372,10 @@ int main(int argc, char **argv)
 
     cv::Mat image = cv::Mat::eye(SCREEN_H, SCREEN_W, CV_8UC3);
 
-	//temp_test();
-	//return 0;
+    //temp_test();
+    //return 0;
 
-	if (av_image_alloc(src_data, src_linesize, image.cols, image.rows, AV_PIX_FMT_BGR24, 16) < 0) {
+    if (av_image_alloc(src_data, src_linesize, image.cols, image.rows, AV_PIX_FMT_BGR24, 16) < 0) {
         printf("alloc src image failed\n");
         return ret;
     }
