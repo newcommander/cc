@@ -40,8 +40,11 @@ static int dst_linesize[4];
 typedef std::vector<std::pair<cv::Point3d, cv::Scalar> > Color_Points;
 
 static Color_Points world_aixs;
+
 static Color_Points camera_aixs;
-static cv::Point3d camera_pos;
+static cv::Point3d camera_origin;
+static cv::Point3d camera_angle_on_world_aixs;
+static cv::Point3d camera_angle_self;
 
 static Color_Points g_obj;
 
@@ -52,6 +55,10 @@ static struct color_point_data {
     { cv::Point3d(1.0, 0.0, 0.0), cv::Scalar(0,     0, 255) },
     { cv::Point3d(0.0, 1.0, 0.0), cv::Scalar(0,   255,   0) },
     { cv::Point3d(0.0, 0.0, 1.0), cv::Scalar(255,   0,   0) }
+}, camera_aixs_data[] = {
+    { cv::Point3d(1.0, 0.0, 30.0), cv::Scalar(0, 0, 0) },
+    { cv::Point3d(0.0, 1.0, 30.0), cv::Scalar(0, 0, 0) },
+    { cv::Point3d(0.0, 0.0, 31.0), cv::Scalar(0, 0, 0) }
 }, g_obj_data[] = {
     { cv::Point3d(   0.0, 1.0,   0.0), cv::Scalar(0,     0, 255) },
     { cv::Point3d(   0.0, 0.0,  -1.0), cv::Scalar(0,   255,   0) },
@@ -62,22 +69,6 @@ static struct color_point_data {
 static void insert_color_point(Color_Points &obj, cv::Point3d coordinate, cv::Scalar color)
 {
     obj.push_back(std::make_pair<cv::Point3d, cv::Scalar>(coordinate, color));
-}
-
-static void init_variables(void)
-{
-    int i;
-
-    insert_color_point(camera_aixs, cv::Point3d(1.0, 0.0,  0.0), cv::Scalar(0,     0, 255));
-    insert_color_point(camera_aixs, cv::Point3d(0.0, 1.0,  0.0), cv::Scalar(0,   255, 255));
-    insert_color_point(camera_aixs, cv::Point3d(0.0, 0.0, -1.0), cv::Scalar(255,   0, 255));
-    camera_pos = cv::Point3d(0.0, 0.0, 300.0);
-
-    for (i = 0; i < 3; i++)
-        insert_color_point(world_aixs, world_aixs_data[i].coordinate, world_aixs_data[i].color);
-
-    for (i = 0; i < 4; i++)
-        insert_color_point(g_obj, g_obj_data[i].coordinate, g_obj_data[i].color);
 }
 
 static cv::Point3d rotating_on_x_aixs(cv::Point3d &point, double angle, double sin_angle, double cos_angle)
@@ -205,43 +196,32 @@ static cv::Point3d rotating_point(cv::Point3d &point, cv::Point3d aixs_head, cv:
     return result_point;
 }
 
-static void rotating_object(Color_Points &object, Color_Points &output, bool in_place, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
+static void rotating_object(Color_Points &object, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
 {
-    Color_Points *p;
     unsigned int i;
-
-    if (in_place) {
-        p = &object;
-    } else {
-        output = object;
-        p = &output;
-    }
 
     if (angle == 0.0)
         return;
 
-    for (i = 0; i < (*p).size(); i++)
-        (*p)[i].first = rotating_point((*p)[i].first, aixs_head, aixs_tail, angle);
+    for (i = 0; i < object.size(); i++)
+        object[i].first = rotating_point(object[i].first, aixs_head, aixs_tail, angle);
 }
 
-static void draw_aixs(cv::Mat &image, Color_Points &aixs)
+static void rotating_to_camera_view(Color_Points &object)
 {
-    cv::Point origin(image.cols/2, image.rows/2), head;
-    int lineType = cv::LINE_AA, thickness = 1, scale = 100;
+    if (camera_angle_on_world_aixs.x != 0.0)
+        rotating_object(object, world_aixs[0].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.x);
+    if (camera_angle_on_world_aixs.y != 0.0)
+        rotating_object(object, world_aixs[1].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.y);
+    if (camera_angle_on_world_aixs.z != 0.0)
+        rotating_object(object, world_aixs[2].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.z);
 
-    if (aixs.size() < 3) {
-        printf("%s(): Invalid parameter\n", __func__);
-        return;
-    }
-
-    head = cv::Point(aixs[0].first.x * scale + origin.x, origin.y - aixs[0].first.y * scale);
-    cv::arrowedLine(image, origin, head, aixs[0].second, thickness, lineType);
-
-    head = cv::Point(aixs[1].first.x * scale + origin.x, origin.y - aixs[1].first.y * scale);
-    cv::arrowedLine(image, origin, head, aixs[1].second, thickness, lineType);
-
-    head = cv::Point(aixs[2].first.x * scale + origin.x, origin.y - aixs[2].first.y * scale);
-    cv::arrowedLine(image, origin, head, aixs[2].second, thickness, lineType);
+    if (camera_angle_self.x != 0.0)
+        rotating_object(object, camera_aixs[0].first, camera_origin, camera_angle_self.x);
+    if (camera_angle_self.y != 0.0)
+        rotating_object(object, camera_aixs[1].first, camera_origin, camera_angle_self.y);
+    if (camera_angle_self.z != 0.0)
+        rotating_object(object, camera_aixs[2].first, camera_origin, camera_angle_self.z);
 }
 
 static void draw_obj(cv::Mat &image, Color_Points &obj)
@@ -278,10 +258,9 @@ static void draw_obj(cv::Mat &image, Color_Points &obj)
     cv::line(image, head1, head2, cv::Scalar(255, 255, 0), thickness, lineType);
 }
 
-static void opencv_draw(cv::Mat &image)
+static void draw_info(cv::Mat &image)
 {
     std::stringstream s;
-    Color_Points output;
     cv::String text;
     cv::Size text_size;
     cv::Scalar text_color = cv::Scalar(173, 121, 54);
@@ -289,30 +268,81 @@ static void opencv_draw(cv::Mat &image)
     double text_scale = 0.5;
     int text_thickness = 1;
 
-    cv::rectangle(image, cv::Point(0, 0), cv::Point(image.cols, image.rows), cv::Scalar(86, 60, 27), -1);
-
-    rotating_object(world_aixs, output, false, world_aixs[0].first, cv::Point3d(0.0, 0.0, 0.0), PI/8);
-    rotating_object(output, output, false, output[1].first, cv::Point3d(0.0, 0.0, 0.0), -PI/8);
-    draw_aixs(image, output);
-
-    rotating_object(g_obj, output, true, cv::Point3d(1.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, 0.0), PI/512);
-    draw_obj(image, g_obj);
-
-    s << "aixs_x=" << world_aixs[0].first;
+    s << "camera_origin: " << camera_origin;
     text = s.str();
     text_size = cv::getTextSize(text, text_font, text_scale, text_thickness, NULL);
     cv::putText(image, text, cv::Point(10, 20), text_font, text_scale, text_color, text_thickness, cv::LINE_AA, false);
 
     s.str("");
-    s << "aixs_y=" << world_aixs[1].first;
+    s << "camera_angle: " << camera_angle_self << " / " << camera_angle_on_world_aixs;
     text = s.str();
-    text_size = cv::getTextSize(text, text_font, text_scale, text_thickness, NULL);
-    cv::putText(image, text, cv::Point(10, 20 + (10 + text_size.height)), text_font, text_scale, text_color, text_thickness, cv::LINE_AA, false);
+    cv::putText(image, text, cv::Point(10, 20+10+text_size.height), text_font, text_scale, text_color, text_thickness, cv::LINE_AA, false);
+}
 
-    s.str("");
-    s << "aixs_z=" << world_aixs[2].first;
-    text = s.str();
-    cv::putText(image, text, cv::Point(10, 20 + (10 + text_size.height) * 2), text_font, text_scale, text_color, text_thickness, cv::LINE_AA, false);
+static void draw_aixs(cv::Mat &image, Color_Points &aixs)
+{
+    cv::Point origin(50, image.rows - 50), head;
+    Color_Points new_aixs = aixs;
+    int lineType = cv::LINE_AA, thickness = 1, scale = 30;
+
+    if (new_aixs.size() < 3) {
+        printf("%s(): Invalid parameter\n", __func__);
+        return;
+    }
+
+    if (camera_angle_on_world_aixs.x != 0.0)
+        rotating_object(new_aixs, world_aixs[0].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.x);
+    if (camera_angle_on_world_aixs.y != 0.0)
+        rotating_object(new_aixs, world_aixs[1].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.y);
+    if (camera_angle_on_world_aixs.z != 0.0)
+        rotating_object(new_aixs, world_aixs[2].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.z);
+
+    head = cv::Point(new_aixs[0].first.x * scale + origin.x, origin.y - new_aixs[0].first.y * scale);
+    cv::arrowedLine(image, origin, head, new_aixs[0].second, thickness, lineType);
+
+    head = cv::Point(new_aixs[1].first.x * scale + origin.x, origin.y - new_aixs[1].first.y * scale);
+    cv::arrowedLine(image, origin, head, new_aixs[1].second, thickness, lineType);
+
+    head = cv::Point(new_aixs[2].first.x * scale + origin.x, origin.y - new_aixs[2].first.y * scale);
+    cv::arrowedLine(image, origin, head, new_aixs[2].second, thickness, lineType);
+}
+
+static void draw_object_1(cv::Mat &image, Color_Points &object)
+{
+    Color_Points new_object = object;
+
+    rotating_to_camera_view(new_object);
+
+    draw_obj(image, new_object);
+}
+
+static void opencv_draw(cv::Mat &image)
+{
+    cv::rectangle(image, cv::Point(0, 0), cv::Point(image.cols, image.rows), cv::Scalar(86, 60, 27), -1);
+
+    draw_info(image);
+
+    draw_aixs(image, world_aixs);
+
+    draw_object_1(image, g_obj);
+}
+
+static void init_variables(void)
+{
+    int i;
+
+    camera_origin = cv::Point3d(0.0, 0.0, 30.0);
+    camera_angle_on_world_aixs = cv::Point3d(0.0, 0.0, 0.0);
+    camera_angle_self = cv::Point3d(0.0, 0.0, 0.0);
+
+    for (i = 0; i < 3; i++)
+        insert_color_point(world_aixs, world_aixs_data[i].coordinate, world_aixs_data[i].color);
+
+    for (i = 0; i < 3; i++)
+        insert_color_point(camera_aixs, camera_aixs_data[i].coordinate, camera_aixs_data[i].color);
+
+    for (i = 0; i < 4; i++)
+        insert_color_point(g_obj, g_obj_data[i].coordinate, g_obj_data[i].color);
 }
 
 static int opencv_sampling(void *_frame, int screen_h, int screen_w, void *arg)
@@ -349,21 +379,6 @@ static int opencv_sampling(void *_frame, int screen_h, int screen_w, void *arg)
     return 0;
 }
 
-void temp_test()
-{
-    cv::Point3d a(1.0, 1.0, 1.0), b(0.0, 0.0, 0.0), c(0.0, 0.0, 0.0), d(0.0, 0.0, 0.0), e(0.0, 0.0, 0.0);
-
-    b = rotating_point(a, cv::Point3d(1.0, 0.001, 0.0), cv::Point3d(0.0, 0.0, 0.0), PI/4);
-    c = rotating_on_x_aixs(a, PI/4, 0.0, 0.0);
-    d = rotating_on_y_aixs(a, PI/4, 0.0, 0.0);
-    e = rotating_on_z_aixs(a, PI/4, 0.0, 0.0);
-
-    std::cout << "r:" << b << std::endl;
-    std::cout << "x:" << c << std::endl;
-    std::cout << "y:" << d << std::endl;
-    std::cout << "z:" << e << std::endl;
-}
-
 int main(int argc, char **argv)
 {
     struct stream_source stream_src;
@@ -371,9 +386,6 @@ int main(int argc, char **argv)
     int ret = -1;
 
     cv::Mat image = cv::Mat::eye(SCREEN_H, SCREEN_W, CV_8UC3);
-
-    //temp_test();
-    //return 0;
 
     if (av_image_alloc(src_data, src_linesize, image.cols, image.rows, AV_PIX_FMT_BGR24, 16) < 0) {
         printf("alloc src image failed\n");
