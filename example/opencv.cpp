@@ -76,13 +76,13 @@ static struct color_plane_data {
     cv::Scalar color;
 } g_object_data[] = {
     { cv::Point3d(0.0, -2.0, 0.0), cv::Point3d(0.0, 0.0, 1.0), cv::Point3d(1.0, 0.0, 0.0), cv::Scalar(64, 64, 64) },
-    { cv::Point3d(0.0, -2.0, 0.0), cv::Point3d(0.0, 0.0, 1.0), cv::Point3d(-1.0, 0.0, 0.0), cv::Scalar(64, 64, 64) },
-    { cv::Point3d(0.0, -2.0, 0.0), cv::Point3d(0.0, 0.0, -1.0), cv::Point3d(1.0, 0.0, 0.0), cv::Scalar(64, 64, 64) },
-    { cv::Point3d(0.0, -2.0, 0.0), cv::Point3d(0.0, 0.0, -1.0), cv::Point3d(-1.0, 0.0, 0.0), cv::Scalar(64, 64, 64) },
-    { cv::Point3d(0.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, 1.0), cv::Point3d(1.0, 0.0, 0.0), cv::Scalar(64, 64, 64) },
-    { cv::Point3d(0.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, 1.0), cv::Point3d(-1.0, 0.0, 0.0), cv::Scalar(64, 64, 64) },
-    { cv::Point3d(0.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, -1.0), cv::Point3d(1.0, 0.0, 0.0), cv::Scalar(64, 64, 64) },
-    { cv::Point3d(0.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, -1.0), cv::Point3d(-1.0, 0.0, 0.0), cv::Scalar(64, 64, 64) }
+    { cv::Point3d(0.0, -2.0, 0.0), cv::Point3d(0.0, 0.0, 1.0), cv::Point3d(-1.0, 0.0, 0.0), cv::Scalar(64, 64, 192) },
+    { cv::Point3d(0.0, -2.0, 0.0), cv::Point3d(0.0, 0.0, -1.0), cv::Point3d(1.0, 0.0, 0.0), cv::Scalar(64, 192, 64) },
+    { cv::Point3d(0.0, -2.0, 0.0), cv::Point3d(0.0, 0.0, -1.0), cv::Point3d(-1.0, 0.0, 0.0), cv::Scalar(64, 192, 192) },
+    { cv::Point3d(0.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, 1.0), cv::Point3d(1.0, 0.0, 0.0), cv::Scalar(192, 64, 64) },
+    { cv::Point3d(0.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, 1.0), cv::Point3d(-1.0, 0.0, 0.0), cv::Scalar(192, 64, 192) },
+    { cv::Point3d(0.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, -1.0), cv::Point3d(1.0, 0.0, 0.0), cv::Scalar(192, 192, 64) },
+    { cv::Point3d(0.0, 2.0, 0.0), cv::Point3d(0.0, 0.0, -1.0), cv::Point3d(-1.0, 0.0, 0.0), cv::Scalar(192, 192, 192) }
 };
 
 static void insert_color_point(Color_Points &obj, cv::Point3d coordinate, cv::Scalar color)
@@ -165,9 +165,9 @@ static cv::Point3d rotating_on_z_aixs(cv::Point3d &point, double angle, double s
 //         /
 //        /
 //       Z
-static cv::Point3d rotating_point(cv::Point3d &point, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
+static void rotating_point(cv::Point3d &point, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
 {
-    cv::Point3d origined_aixs, origined_point, result_point(0.0, 0.0, 0.0);
+    cv::Point3d origined_aixs, origined_point;
     cv::Point3d first_rotated_aixs, first_rotated_point, second_rotated_point;
     //cv::Point3d second_rotated_aixs;
     double mod_xz, mod_yz;
@@ -178,16 +178,16 @@ static cv::Point3d rotating_point(cv::Point3d &point, cv::Point3d aixs_head, cv:
 
     if ((origined_aixs.y == 0.0) && (origined_aixs.z == 0.0)) {
         origined_point = rotating_on_x_aixs(origined_point, angle, 0.0, 0.0);
-        result_point = origined_point + aixs_tail;
-        return result_point;
+        point = origined_point + aixs_tail;
+        return;
     } else if ((origined_aixs.x == 0.0) && (origined_aixs.z == 0.0)) {
         origined_point = rotating_on_y_aixs(origined_point, angle, 0.0, 0.0);
-        result_point = origined_point + aixs_tail;
-        return result_point;
+        point = origined_point + aixs_tail;
+        return;
     } else if ((origined_aixs.x == 0.0) && (origined_aixs.y == 0.0)) {
         origined_point = rotating_on_z_aixs(origined_point, angle, 0.0, 0.0);
-        result_point = origined_point + aixs_tail;
-        return result_point;
+        point = origined_point + aixs_tail;
+        return;
     }
 
     // aixs rotating to XOZ plane
@@ -210,9 +210,7 @@ static cv::Point3d rotating_point(cv::Point3d &point, cv::Point3d aixs_head, cv:
     origined_point = rotating_on_x_aixs(first_rotated_point, 0.0, -1 * origined_aixs.y/mod_yz, 0.0);
 
     // move back
-    result_point = origined_point + aixs_tail;
-
-    return result_point;
+    point = origined_point + aixs_tail;
 }
 
 static void rotating_object(Color_Points &object, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
@@ -223,7 +221,7 @@ static void rotating_object(Color_Points &object, cv::Point3d aixs_head, cv::Poi
         return;
 
     for (i = 0; i < object.size(); i++)
-        object[i].first = rotating_point(object[i].first, aixs_head, aixs_tail, angle);
+        rotating_point(object[i].first, aixs_head, aixs_tail, angle);
 }
 
 static void rotating_object1(Color_Planes &object, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
@@ -234,44 +232,32 @@ static void rotating_object1(Color_Planes &object, cv::Point3d aixs_head, cv::Po
         return;
 
     for (i = 0; i < object.size(); i++) {
-        object[i].first[0] = rotating_point(object[i].first[0], aixs_head, aixs_tail, angle);
-        object[i].first[1] = rotating_point(object[i].first[1], aixs_head, aixs_tail, angle);
-        object[i].first[2] = rotating_point(object[i].first[2], aixs_head, aixs_tail, angle);
+        rotating_point(object[i].first[0], aixs_head, aixs_tail, angle);
+        rotating_point(object[i].first[1], aixs_head, aixs_tail, angle);
+        rotating_point(object[i].first[2], aixs_head, aixs_tail, angle);
     }
 }
 
 static void rotating_to_camera_view(Color_Points &object)
 {
-    if (camera_angle_on_world_aixs.x != 0.0)
-        rotating_object(object, world_aixs[0].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.x);
-    if (camera_angle_on_world_aixs.y != 0.0)
-        rotating_object(object, world_aixs[1].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.y);
-    if (camera_angle_on_world_aixs.z != 0.0)
-        rotating_object(object, world_aixs[2].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.z);
+    rotating_object(object, world_aixs[0].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.x);
+    rotating_object(object, world_aixs[1].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.y);
+    rotating_object(object, world_aixs[2].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.z);
 
-    if (camera_angle_self.x != 0.0)
-        rotating_object(object, camera_aixs[0].first, camera_origin, camera_angle_self.x);
-    if (camera_angle_self.y != 0.0)
-        rotating_object(object, camera_aixs[1].first, camera_origin, camera_angle_self.y);
-    if (camera_angle_self.z != 0.0)
-        rotating_object(object, camera_aixs[2].first, camera_origin, camera_angle_self.z);
+    rotating_object(object, camera_aixs[0].first, camera_origin, camera_angle_self.x);
+    rotating_object(object, camera_aixs[1].first, camera_origin, camera_angle_self.y);
+    rotating_object(object, camera_aixs[2].first, camera_origin, camera_angle_self.z);
 }
 
 static void rotating_to_camera_view1(Color_Planes &object)
 {
-    if (camera_angle_on_world_aixs.x != 0.0)
-        rotating_object1(object, world_aixs[0].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.x);
-    if (camera_angle_on_world_aixs.y != 0.0)
-        rotating_object1(object, world_aixs[1].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.y);
-    if (camera_angle_on_world_aixs.z != 0.0)
-        rotating_object1(object, world_aixs[2].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.z);
+    rotating_object1(object, world_aixs[0].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.x);
+    rotating_object1(object, world_aixs[1].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.y);
+    rotating_object1(object, world_aixs[2].first, cv::Point3d(0.0, 0.0, 0.0), camera_angle_on_world_aixs.z);
 
-    if (camera_angle_self.x != 0.0)
-        rotating_object1(object, camera_aixs[0].first, camera_origin, camera_angle_self.x);
-    if (camera_angle_self.y != 0.0)
-        rotating_object1(object, camera_aixs[1].first, camera_origin, camera_angle_self.y);
-    if (camera_angle_self.z != 0.0)
-        rotating_object1(object, camera_aixs[2].first, camera_origin, camera_angle_self.z);
+    rotating_object1(object, camera_aixs[0].first, camera_origin, camera_angle_self.x);
+    rotating_object1(object, camera_aixs[1].first, camera_origin, camera_angle_self.y);
+    rotating_object1(object, camera_aixs[2].first, camera_origin, camera_angle_self.z);
 }
 
 static void draw_obj(cv::Mat &image, Color_Points &obj)
@@ -391,24 +377,68 @@ static void make_plane_deep_info(cv::Mat deep_info_plane, std::vector<cv::Point3
     for (j = 0; j < rows; j++) {
         p = deep_info_plane.ptr<double>(j);
         for (i = 0; i < cols; i++) {
-            p[i] = -1 * (a * (offset.x + i) + b * (offset.y + j) + d) / c;
+            p[i] = -1 * (a * (offset.x + 0.5 + i) + b * (offset.y + 0.5 - j) + d) / c;
         }
     }
 }
 
+static void draw_plane_mask(cv::Mat &plane_mask, std::vector<cv::Point3d> &points, cv::Point2d offset)
+{
+    cv::Point pts[1][10];
+    const cv::Point *ppt[1] = { pts[0] };
+    int num[1], i;
+
+    if (points.size() < 3) {
+        printf("%s(): Invalid plane\n", __func__);
+        return;
+    }
+    if (plane_mask.channels() != 1) {
+        printf("%s(): Invalid mask Mat\n", __func__);
+        return;
+    }
+
+    num[0] = points.size() > 10 ? 10 : points.size();
+    for (i = 0; i < num[0]; i++)
+        pts[0][i] = cv::Point(points[i].x - offset.x, offset.y - points[i].y);
+
+    cv::fillPoly(plane_mask, ppt, num, 1, cv::Scalar(1), cv::LINE_AA);
+}
+
+static void draw_plane_image(cv::Mat &plane_image, std::vector<cv::Point3d> &points, cv::Point2d offset, cv::Scalar &color)
+{
+    cv::Point pts[1][10];
+    int num[1], i;
+
+    if (points.size() < 3) {
+        printf("%s(): Invalid plane\n", __func__);
+        return;
+    }
+    if (plane_image.channels() != 3) {
+        printf("%s(): Invalid mask Mat\n", __func__);
+        return;
+    }
+
+    num[0] = points.size() > 10 ? 10 : points.size();
+    for (i = 0; i < num[0]; i++)
+        pts[0][i] = cv::Point(points[i].x - offset.x, offset.y - points[i].y);
+    const cv::Point *ppt[1] = { pts[0] };
+
+    cv::fillPoly(plane_image, ppt, num, 1, color, cv::LINE_AA);
+}
+
 static void draw_plane(cv::Mat &image, cv::Mat &deep_info, std::vector<cv::Point3d> &points, cv::Scalar &color)
 {
-    cv::Mat plane_area, plane_data;
-    cv::Mat deep_info_area, deep_info_data;
+    cv::Mat plane_area, plane_image;
+    cv::Mat deep_info_area, deep_info_plane;
     cv::Mat plane_mask, plane_mask_tmp, plane_mask_3c;
+    cv::Mat plane_mask_array[3];
     cv::Point3d origin(image.cols/2, image.rows/2, 0.0);
     size_t points_count = points.size();
+    double min_x, min_y, max_x, max_y;
     unsigned int i;
-    double min_x, min_y, min_z, max_x, max_y, max_z;
 
     min_x = max_x = points[0].x;
     min_y = max_y = points[0].y;
-    min_z = max_z = points[0].z;
 
     for (i = 0; i < points_count; i++) {
         if (points[i].x < min_x)
@@ -419,11 +449,11 @@ static void draw_plane(cv::Mat &image, cv::Mat &deep_info, std::vector<cv::Point
             min_y = points[i].y;
         if (points[i].y > max_y)
             max_y = points[i].y;
-        if (points[i].z < min_z)
-            min_z = points[i].z;
-        if (points[i].z > max_z)
-            max_z = points[i].z;
     }
+    min_x = floor(min_x);
+    max_x = ceil(max_x);
+    min_y = floor(min_y);
+    max_y = ceil(max_y);
 
     if ((min_x >= max_x) || (min_y >= max_y))
         return;
@@ -431,29 +461,29 @@ static void draw_plane(cv::Mat &image, cv::Mat &deep_info, std::vector<cv::Point
     plane_area = image(cv::Range(origin.y - max_y, origin.y - min_y), cv::Range(origin.x + min_x, origin.x + max_x));
     deep_info_area = deep_info(cv::Range(origin.y - max_y, origin.y - min_y), cv::Range(origin.x + min_x, origin.x + max_x));
 
-    deep_info_data = cv::Mat(max_y - min_y, max_x - min_x, CV_64FC1, cv::Scalar(MOST_DEEP));
-    make_plane_deep_info(deep_info_data, points, cv::Point2d(min_x, max_y));
+    deep_info_plane = cv::Mat(max_y - min_y, max_x - min_x, CV_64FC1, cv::Scalar(MOST_DEEP));
+    make_plane_deep_info(deep_info_plane, points, cv::Point2d(min_x, max_y));
 
-    plane_mask     = cv::Mat(max_y - min_y, max_x - min_x, CV_8UC1, cv::Scalar(1));
+    plane_mask     = cv::Mat(max_y - min_y, max_x - min_x, CV_8UC1, cv::Scalar(0));
     plane_mask_tmp = cv::Mat(max_y - min_y, max_x - min_x, CV_8UC1, cv::Scalar(0));
 
-    plane_mask = plane_mask.mul((deep_info_area < deep_info_data) / 255);
-    // draw plane on plane_mask_tmp with cv::Scalar(1);
+    plane_mask = (deep_info_area < deep_info_plane) / 255;
+    draw_plane_mask(plane_mask_tmp, points, cv::Point2d(min_x, max_y));
     plane_mask = plane_mask.mul(plane_mask_tmp);
-    // draw plane on plane_data
-    plane_data = cv::Mat(max_y - min_y, max_x - min_x, CV_8UC3, cv::Scalar(0, 0, 0));
-    plane_mask.convertTo(plane_mask_3c, CV_8UC3);
-    std::cout << "plane_area:" << plane_area.rows << "x" << plane_area.cols << "x" << plane_area.channels() << std::endl;
-    std::cout << "plane_data:" << plane_data.rows << "x" << plane_data.cols << "x" << plane_data.channels() << std::endl;
-    std::cout << "plane_mask_3c:" << plane_mask_3c.rows << "x" << plane_mask_3c.cols << "x" << plane_mask_3c.channels() << std::endl;
-    plane_area = plane_area.mul((plane_mask_3c - cv::Scalar(1, 1, 1)) * -1) + plane_data.mul(plane_mask_3c);
+    plane_mask_array[0] = plane_mask;
+    plane_mask_array[1] = plane_mask;
+    plane_mask_array[2] = plane_mask;
+    cv::merge(plane_mask_array, 3, plane_mask_3c);
+
+    plane_image = cv::Mat(max_y - min_y, max_x - min_x, CV_8UC3, cv::Scalar(0, 0, 0));
+    draw_plane_image(plane_image, points, cv::Point2d(min_x, max_y), color);
+    plane_area = plane_area.mul((~plane_mask_3c) - cv::Scalar(254, 254, 254)) + plane_image.mul(plane_mask_3c);
 }
 
 static void draw_object(cv::Mat &image, cv::Mat deep_info, Color_Planes &object)
 {
-    unsigned int i;
-
     Color_Planes new_object = object;
+    unsigned int i;
 
     rotating_to_camera_view1(new_object);
 
@@ -501,6 +531,7 @@ static void opencv_draw(cv::Mat &image)
     cv::rectangle(image, cv::Point(0, 0), cv::Point(image.cols, image.rows), cv::Scalar(86, 60, 27), -1);
 
     draw_object(image, deep_info, g_object);
+    camera_angle_on_world_aixs.x += 0.1;
     return;
 
     draw_test(image);
@@ -533,9 +564,9 @@ static void init_variables(void)
 
     for (i = 0; i < 8; i++) {
         points.clear();
-        points.push_back(g_object_data[i].p1);
-        points.push_back(g_object_data[i].p2);
-        points.push_back(g_object_data[i].p3);
+        points.push_back(g_object_data[i].p1 * 50);
+        points.push_back(g_object_data[i].p2 * 50);
+        points.push_back(g_object_data[i].p3 * 50);
         g_object.push_back(std::make_pair<std::vector<cv::Point3d>, cv::Scalar>(points, g_object_data[i].color));
     }
 }
