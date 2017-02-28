@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <pthread.h>
 
-#include "../ccstream.h"
+#include "../ccstream/ccstream.h"
 #include <libavutil/opt.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>

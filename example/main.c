@@ -2,8 +2,8 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "../common.h"
-#include "../ccstream.h"
+#include "../ccstream/common.h"
+#include "../ccstream/ccstream.h"
 
 extern int sampling(void *_frame, int screen_h, int screen_w, void *arg);
 extern int lala(void *_frame, int screen_h, int screen_w, void *arg);

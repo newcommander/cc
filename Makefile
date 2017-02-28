@@ -1,25 +1,20 @@
-INCLUDE=-I/root/work/stream/output/include
-LINK=-L/root/work/stream/output/lib -L.
+CCSTREAM_DIR=ccstream
 EXAMPLE_DIR=example
+
+INCLUDE=-I/root/work/stream/output/include
+LINK=-L/root/work/stream/output/lib -L./$(CCSTREAM_DIR)
 
 CC=/usr/local/gcc-4.8.2/bin/gcc
 CXX=/usr/local/gcc-4.8.2/bin/g++
 CFLAGS=-c -g -Wall -fPIC -pthread
 CXXFLAGS=-c -g -Wall -fPIC -pthread
-LFLAGS=-lavcodec -lavformat -lswresample -lavutil -lswscale -pthread \
-	   -levent_core -luv -lopencv_imgproc -lz -lrt -lm
+LFLAGS=-lccstream
 
-OBJ=uri.o rtp.o rtcp.o session.o encoder.o rtsp.o ccstream.o
-EXAMPLE_OBJ=$(EXAMPLE_DIR)/main.o $(EXAMPLE_DIR)/sample_functions.o
-OPENCV_OBJ=$(EXAMPLE_DIR)/opencv.o
+OBJ=opencv.o
 
-TARGET=libccstream.so
-EXAMPLE_TARGET=$(EXAMPLE_DIR)/example
-OPENCV_TARGET=$(EXAMPLE_DIR)/opencv
+TARGET=run
 
-INSTALL_DIR=/usr/lib64/
-
-.PHONY: all example opencv install unstall clean
+.PHONY: all example ccstream clean example_clean ccstream_clean
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(CFLAGS) $< -o $@
@@ -27,25 +22,20 @@ INSTALL_DIR=/usr/lib64/
 %.o: %.cpp
 	$(CXX) $(INCLUDE) $(CXXFLAGS) $< -o $@
 
-all: $(OBJ)
-	$(CC) $(LINK) $(OBJ) $(LFLAGS) -shared -o $(TARGET)
-	rm -f $(OBJ)
+all: ccstream $(OBJ)
+	$(CC) $(LINK) $(OBJ) $(LFLAGS) -o $(TARGET)
 
-example: $(EXAMPLE_OBJ)
-	$(CC) $(LINK) $(EXAMPLE_OBJ) $(LFLAGS) -lccstream -o $(EXAMPLE_TARGET)
-	rm -f $(EXAMPLE_OBJ)
+example: ccstream
+	make -C $(EXAMPLE_DIR)
 
-opencv: $(OPENCV_OBJ)
-	$(CC) $(LINK) $(OPENCV_OBJ) $(LFLAGS) -lccstream -o $(OPENCV_TARGET)
-	rm -f $(OPENCV_OBJ)
+ccstream:
+	make -C $(CCSTREAM_DIR)
 
-install:
-	cp -f $(TARGET) /usr/lib/
-	cp -f $(TARGET) /usr/lib64/
+clean: ccstream_clean example_clean
+	rm -f $(OBJ) $(TARGET)
 
-unstall:
-	rm -f /use/lib/$(TARGET)
-	rm -f /use/lib64/$(TARGET)
+ccstream_clean:
+	make -C $(CCSTREAM_DIR) clean
 
-clean:
-	rm -f $(OBJ) $(EXAMPLE_OBJ) $(OPENCV_OBJ) $(TARGET) $(EXAMPLE_TARGET) $(OPENCV_TARGET)
+example_clean:
+	make -C $(EXAMPLE_DIR) clean
