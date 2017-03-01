@@ -53,6 +53,7 @@ static cv::Point3d camera_angle_self;
 static Color_Points camera_aixs;
 static Color_Points g_obj;
 static Color_Planes g_object;
+static std::vector<Color_Planes> g_objects;
 
 static struct color_point_data {
     cv::Point3d coordinate;
@@ -502,7 +503,7 @@ static void opencv_draw(cv::Mat &image)
     cv::Mat deep_info(image.size(), CV_64FC1, cv::Scalar(MOST_DEEP));
     cv::rectangle(image, cv::Point(0, 0), cv::Point(image.cols, image.rows), cv::Scalar(86, 60, 27), -1);
 
-    draw_object(image, deep_info, g_object);
+    draw_object(image, deep_info, g_objects[0]);
 
     draw_info(image);
 
@@ -516,14 +517,69 @@ static void opencv_draw(cv::Mat &image)
     camera_angle_on_world_aixs.z += 0.1;
 }
 
+static void make_point3d(std::string line, std::vector<cv::Point3d> &vertexes)
+{
+    double x, y, z, scale = 50;
+    // XXX precision loss
+    sscanf(line.c_str(), "%lf %lf %lf", &x, &y, &z);
+    vertexes.push_back(cv::Point3d(x * scale, y * scale, z * scale));
+}
+
+static void make_plane(std::string line, cv::Scalar color, std::vector<cv::Point3d> &vertexes, Color_Planes &obj)
+{
+    std::vector<cv::Point3d> verts;
+    int slash = 0, space = 0;
+
+    verts.clear();
+    while (1) {
+        slash = line.find('/', space);
+        if (slash < 0)
+            break;
+        space = line.find(' ', slash);
+        verts.push_back(vertexes[line[slash - 1] - '0' - 1]);
+    }
+    obj.push_back(std::make_pair<std::vector<cv::Point3d>, cv::Scalar>(verts, color));
+}
+
 static int load_data(std::string file_name)
 {
     std::ifstream file(file_name.c_str());
-    std::string line;
+    std::string line, type;
+    std::vector<cv::Point3d> vertexes;
+    std::pair<std::vector<cv::Point3d>, cv::Scalar> plane;
+    Color_Planes obj;
 
     if (file) {
-        while (std::getline(file, line))
-            std::cout << line << std::endl;
+        while (std::getline(file, line)) {
+            if (line[0] == '#')
+                continue;
+            type = line.substr(0, line.find(' ', 0));
+            if (type == "o") {
+                obj.clear();
+                vertexes.clear();
+                while (std::getline(file, line)) {
+                    if (line[0] == '#')
+                        continue;
+                    type = line.substr(0, line.find(' ', 0));
+                    if (type == "v")
+                        make_point3d(line.substr(line.find(' ', 0) + 1, line.length() - line.find(' ', 0)), vertexes);
+                    else
+                        break;
+                }
+                if (vertexes.size() == 0)
+                    continue;
+                while (std::getline(file, line)) {
+                    if (line[0] == '#')
+                        continue;
+                    type = line.substr(0, line.find(' ', 0));
+                    if (type == "f")
+                        make_plane(line.substr(line.find(' ', 0) + 1, line.length() - line.find(' ', 0)), cv::Scalar(192, 192, 192), vertexes, obj);
+                    else if (type == "o")
+                        break;
+                }
+                g_objects.push_back(obj);
+            }
+        }
     } else {
         std::cout << "No such file: " << file_name << std::endl;
         return -1;
