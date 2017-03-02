@@ -230,16 +230,14 @@ static void rotating_object_1(Color_Points &object, cv::Point3d aixs_head, cv::P
 
 static void rotating_object(Color_Planes &object, cv::Point3d aixs_head, cv::Point3d aixs_tail, double angle)
 {
-    unsigned int i;
+    unsigned int i, j;
 
     if (angle == 0.0)
         return;
 
-    for (i = 0; i < object.size(); i++) {
-        rotating_point(object[i].first[0], aixs_head, aixs_tail, angle);
-        rotating_point(object[i].first[1], aixs_head, aixs_tail, angle);
-        rotating_point(object[i].first[2], aixs_head, aixs_tail, angle);
-    }
+    for (i = 0; i < object.size(); i++)
+        for (j = 0; j < object[i].first.size(); j++)
+            rotating_point(object[i].first[j], aixs_head, aixs_tail, angle);
 }
 
 static void rotating_to_camera_view_1(Color_Points &object)
@@ -388,7 +386,7 @@ static void make_plane_deep_info(cv::Mat deep_info_plane, std::vector<cv::Point3
 
 static void draw_plane_mask(cv::Mat &plane_mask, std::vector<cv::Point3d> &points, cv::Point2d offset)
 {
-    cv::Point pts[1][10];
+    cv::Point pts[1][MAX_VERTEX_OF_PLANE];
     const cv::Point *ppt[1] = { pts[0] };
     int num[1], i;
 
@@ -401,7 +399,7 @@ static void draw_plane_mask(cv::Mat &plane_mask, std::vector<cv::Point3d> &point
         return;
     }
 
-    num[0] = points.size() > 10 ? 10 : points.size();
+    num[0] = points.size() > MAX_VERTEX_OF_PLANE ? MAX_VERTEX_OF_PLANE : points.size();
     for (i = 0; i < num[0]; i++)
         pts[0][i] = cv::Point(points[i].x - offset.x, offset.y - points[i].y);
 
@@ -410,7 +408,7 @@ static void draw_plane_mask(cv::Mat &plane_mask, std::vector<cv::Point3d> &point
 
 static void draw_plane_image(cv::Mat &plane_image, std::vector<cv::Point3d> &points, cv::Point2d offset, cv::Scalar &color)
 {
-    cv::Point pts[1][10];
+    cv::Point pts[1][MAX_VERTEX_OF_PLANE];
     int num[1], i;
 
     if (points.size() < 3) {
@@ -525,20 +523,29 @@ static void make_point3d(std::string line, std::vector<cv::Point3d> &vertexes)
     vertexes.push_back(cv::Point3d(x * scale, y * scale, z * scale));
 }
 
+int circle = 0;
 static void make_plane(std::string line, cv::Scalar color, std::vector<cv::Point3d> &vertexes, Color_Planes &obj)
 {
     std::vector<cv::Point3d> verts;
-    int slash = 0, space = 0;
+    int slash = 0, space = 0, count = 0, index;
 
     verts.clear();
     while (1) {
         slash = line.find('/', space);
         if (slash < 0)
             break;
+        index = strtod(line.substr(space, slash - space).c_str(), NULL);
+        verts.push_back(vertexes[index - 1]);
+        count++;
         space = line.find(' ', slash);
-        verts.push_back(vertexes[line[slash - 1] - '0' - 1]);
     }
-    obj.push_back(std::make_pair<std::vector<cv::Point3d>, cv::Scalar>(verts, color));
+    if (count > MAX_VERTEX_OF_PLANE) {
+        printf("%s: too many vertex of a plane, %d > max=%d, ignore this plane!\n", __func__, count, MAX_VERTEX_OF_PLANE);
+        return;
+    }
+//    obj.push_back(std::make_pair<std::vector<cv::Point3d>, cv::Scalar>(verts, color));
+    obj.push_back(std::make_pair<std::vector<cv::Point3d>, cv::Scalar>(verts, color + cv::Scalar(((circle/4)%2)*127, ((circle/2)%2)*127, (circle%2)*127)));
+    circle++;
 }
 
 static int load_data(std::string file_name)
@@ -573,7 +580,7 @@ static int load_data(std::string file_name)
                         continue;
                     type = line.substr(0, line.find(' ', 0));
                     if (type == "f")
-                        make_plane(line.substr(line.find(' ', 0) + 1, line.length() - line.find(' ', 0)), cv::Scalar(192, 192, 192), vertexes, obj);
+                        make_plane(line.substr(line.find(' ', 0) + 1, line.length() - line.find(' ', 0)), cv::Scalar(128, 128, 128), vertexes, obj);
                     else if (type == "o")
                         break;
                 }
