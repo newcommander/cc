@@ -8,6 +8,10 @@
 
 #include "common.h"
 
+static std::vector<struct Node*> g_nodes;
+static std::vector<struct Task*> g_tasks;
+static std::vector<struct Action*> g_actions;
+
 void main_task_init(void *arg)
 {
     struct Task *task = (struct Task*)arg;
@@ -116,9 +120,20 @@ void sub_task_3_done(void *arg)
 
 void task_config(struct Task *task, struct Task *parent_task, struct Task_info task_info)
 {
+    unsigned int i;
+
     task->name = task_info.name;
-    task->state = 0;
-    task->parent_task = parent_task;
+    task->tag = task_info.tag;
+    task->state = TASK_STATE_IDLE;
+    task->node_tag = task_info.node_tag;
+    task->node = NULL;
+    if (parent_task)
+        task->parent_task_tag = parent_task->tag;
+    else
+        task->parent_task_tag = 0;
+    task->parent_task = NULL;
+    for (i = 0; i < task_info.sub_task_num; i++)
+        task->sub_tasks_tag.push_back(task_info.sub_tasks_tag[i]);
     task->sub_tasks.clear();
     task->task_init = task_info.task_init;
     task->task_run = task_info.task_run;
@@ -133,24 +148,21 @@ int main(int argc, char **argv)
         { "sub task 2", 0x2, 0xfffffffd, sub_task_2_init, sub_task_2_run, sub_task_2_done, 0 },
         { "sub task 3", 0x3, 0xfffffffc, sub_task_3_init, sub_task_3_run, sub_task_3_done, 0 },
     };
-    struct Task main_task, *sub_task = NULL;
+    struct Task *task = NULL;
     unsigned int i;
 
-    memset(&main_task, 0, sizeof(struct Task));
-    task_config(&main_task, NULL, info[0]);
-
-    for (i = 1; i < ARRAY_SIZE(info); i++) {
-        sub_task = (struct Task*)calloc(1, sizeof(struct Task));
-        if (!sub_task) {
-            printf("[%s]: Allocate memory for #%d sub_task failed.\n", main_task.name.c_str(), i);
+    for (i = 0; i < ARRAY_SIZE(info); i++) {
+        task = (struct Task*)calloc(1, sizeof(struct Task));
+        if (!task) {
+            printf("Allocate memory for #%d task failed.\n", i);
             for (i = 0; i < main_task.sub_tasks.size(); i++)
                 free(main_task.sub_tasks[i]);
             main_task.sub_tasks.clear();
             return -ENOMEM;
         }
-        task_config(sub_task, &main_task, info[i]);
-        main_task.sub_tasks.push_back(sub_task);
-        sub_task = NULL;
+        task_config(task, &main_task, info[i]);
+        g_tasks.push_back(task);
+        task = NULL;
     }
 
     if (main_task.task_init)
