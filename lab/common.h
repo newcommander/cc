@@ -1,4 +1,8 @@
+#ifndef COMMON_H
+#define COMMON_H
+
 #include <string>
+#include <set>
 
 class Task;
 class Action;
@@ -8,14 +12,11 @@ public:
     std::string name;
     unsigned int tag;
 
-    unsigned int task_tag;
     Task *task;
-
-    unsigned int action_tag;
     Action *action;
 
-    std::vector<unsigned int> co_nodes_tags;
-    std::vector<Node*> co_nodes;
+    std::set<unsigned int> co_nodes_tags;
+    std::set<Node*> co_nodes;
 };
 
 #define TASK_STATE_IDLE 0
@@ -35,8 +36,8 @@ public:
     unsigned int parent_task_tag;
     Task *parent_task;
 
-    std::vector<unsigned int> sub_tasks_tags;
-    std::vector<Task*> sub_tasks;
+    std::set<unsigned int> sub_tasks_tags;
+    std::set<Task*> sub_tasks;
 
     void (*task_init)(void *arg);
     void (*task_run)(void *arg);
@@ -61,3 +62,5 @@ public:
     void (*action_run)(void *arg);
     void (*action_done)(void *arg);
 };
+
+#endif /* COMMON_H */

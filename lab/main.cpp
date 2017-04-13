@@ -1,24 +1,56 @@
-#include <vector>
+#include <map>
 #include <iostream>
 #include <fstream>
 
 #include <json/json.h>
 #include "common.h"
 
-static std::vector<Node*> g_nodes;
-static std::vector<Task*> g_tasks;
-static std::vector<Action*> g_actions;
+typedef std::pair<unsigned int, Node*> KV;
+
+static std::map<unsigned int, Node*> g_nodes;
+
+void show_nodes()
+{
+    std::map<unsigned int, Node*>::iterator it;
+    std::set<Node*>::iterator co_it;
+    Node *node;
+
+    for (it = g_nodes.begin(); it != g_nodes.end(); it++) {
+        node = it->second;
+        std::cout << node->tag << " :";
+        for (co_it = node->co_nodes.begin(); co_it != node->co_nodes.end(); co_it++)
+            std::cout << " " << (*co_it)->tag;
+        std::cout << std::endl;
+    }
+}
+
+void reset_node_links()
+{
+    std::map<unsigned int, Node*>::iterator it, co_it;
+    std::set<unsigned int>::iterator tag_it;
+    Node *node, *co_node;
+
+    for (it = g_nodes.begin(); it != g_nodes.end(); it++) {
+        node = it->second;
+        for (tag_it = node->co_nodes_tags.begin(); tag_it != node->co_nodes_tags.end(); tag_it++) {
+            co_it = g_nodes.find(*tag_it);
+            if (co_it != g_nodes.end()) {
+                co_node = co_it->second;
+                if (co_node->tag != node->tag)
+                    node->co_nodes.insert(co_node);
+            }
+        }
+    }
+}
 
 int load_node(Json::Value &value)
 {
     Json::Value::ArrayIndex i;
     Node *node;
 
-    if (!value.isMember("name") ||
-        !value.isMember("tag") ||
-        !value.isMember("task_tag") ||
-        !value.isMember("action_tag") ||
-        !value.isMember("co_nodes")) {
+    if (!value.isMember("name") || !value["name"].isString() ||
+        !value.isMember("tag") || !value["tag"].isUInt() ||
+        !value.isMember("co_nodes") || !value["co_nodes"].isArray()) {
         std::cout << "Invalid node." << std::endl;
         return -1;
     }
@@ -29,13 +61,15 @@ int load_node(Json::Value &value)
 
     node->name = value["name"].asString();
     node->tag = value["tag"].asUInt();
-    node->task_tag = value["task_tag"].asUInt();
-    node->action_tag = value["action_tag"].asUInt();
+    node->task = NULL;
+    node->action = NULL;
+    node->co_nodes_tags.clear();
+    node->co_nodes.clear();
 
     for (i = 0; i < value["co_nodes"].size(); i++)
-        node->co_nodes_tags.push_back(value["co_nodes"][i].asUInt());
+        node->co_nodes_tags.insert(value["co_nodes"][i].asUInt());
 
-    g_nodes.push_back(node);
+    g_nodes.insert(KV(node->tag, node));
 
     return 0;
 }
@@ -90,11 +124,17 @@ int load_data(char *file)
         }
     }
 
+    reset_node_links();
+    show_nodes();
+
     return 0;
 }
 
 int main(int argc, char **argv)
 {
+    std::map<unsigned int, Node*>::iterator it;
+    Node *node;
+
     if (argc < 2) {
         std::cout << "Usage: " << argv[0] << " <data_file>" << std::endl;
         return 1;
@@ -102,6 +142,14 @@ int main(int argc, char **argv)
 
     if (load_data(argv[1]) < 0)
         return 1;
+
+    for (it = g_nodes.begin(); it != g_nodes.end(); it++) {
+        node = it->second;
+        node->co_nodes_tags.clear();
+        node->co_nodes.clear();
+        delete node;
+    }
+    g_nodes.clear();
 
     return 0;
 }
