@@ -84,6 +84,32 @@ int load_action(Json::Value &value)
     return 0;
 }
 
+int save_data(char *file)
+{
+    std::map<unsigned int, Node*>::iterator it;
+    std::set<Node*>::iterator co_it;
+    Json::Value root, value, co_nodes;
+    Json::FastWriter writer;
+    std::ofstream outfile;
+    Node *node;
+
+    for (it = g_nodes.begin(); it != g_nodes.end(); it++) {
+        node = it->second;
+        value["type"] = "NODE";
+        value["name"] = node->name;
+        value["tag"] = node->tag;
+        for (co_it = node->co_nodes.begin(); co_it != node->co_nodes.end(); co_it++)
+            value["co_nodes"].append((*co_it)->tag);
+        root.append(value);
+        value.clear();
+    }
+    outfile.open("out.json", std::ofstream::out);
+    outfile << writer.write(root);
+    outfile.flush();
+    outfile.close();
+    return 0;
+}
+
 int load_data(char *file)
 {
     Json::Value::ArrayIndex i;
@@ -126,6 +152,7 @@ int load_data(char *file)
 
     reset_node_links();
     show_nodes();
+    save_data(NULL);
 
     return 0;
 }
