@@ -1,8 +1,0 @@
-[
-{ "type":"NODE", "name":"node 1", "tag":1, "co_nodes":[ 2, 3, 4 ] },
-{ "type":"NODE", "name":"node 2", "tag":2, "co_nodes":[ 2, 5, 6 ] },
-{ "type":"NODE", "name":"node 3", "tag":3, "co_nodes":[ 1, 2, 4 ] },
-{ "type":"NODE", "name":"node 1", "tag":4, "co_nodes":[ 1,2,3,5,6 ] },
-{ "type":"NODE", "name":"node 2", "tag":5, "co_nodes":[ 5,6 ] },
-{ "type":"NODE", "name":"node 3", "tag":6, "co_nodes":[ 1,1,2,3,4 ] }
-]
