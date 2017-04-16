@@ -5,9 +5,9 @@ CC=/usr/local/gcc-4.8.2/bin/gcc
 CXX=/usr/local/gcc-4.8.2/bin/g++
 CFLAGS=-c -g -Wall -fPIC -pthread
 CXXFLAGS=-c -g -Wall -fPIC -pthread
-LFLAGS=-lm -ljsoncpp
+LFLAGS=-ljsoncpp
 
-OBJ=main.o
+OBJ=main.o node.o task.o action.o task_1.o action_1.o
 
 TARGET=run
 
