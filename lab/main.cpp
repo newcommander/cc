@@ -1,6 +1,10 @@
 #include <iostream>
 #include "node.h"
 
+void work()
+{
+}
+
 int main(int argc, char **argv)
 {
     int ret = 0;
@@ -24,6 +28,8 @@ int main(int argc, char **argv)
         goto mount_all_actions_failed;
     }
     show_all_actions();
+
+    work();
 
     clear_all_actions();
 mount_all_actions_failed:

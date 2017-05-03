@@ -2,7 +2,10 @@
 #include <fstream>
 #include "task.h"
 
-std::map<unsigned int, void*> g_tasks;
+static std::map<unsigned int, void*> g_tasks;
+static std::set<Task*> running_tasks;
+static pthread_mutex_t running_tasks_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t task_launcher;
 
 extern Task task_1;
 extern Task task_2;
@@ -167,4 +170,86 @@ void load_tasks()
     g_tasks.clear();
     for (i = 0; i < ARRAY_SIZE(online_tasks); i++)
         add_task(online_tasks[i]);
+}
+
+void* run_task(void *arg)
+{
+    Task *task = (Task*)arg;
+
+    if (!task)
+        return NULL;
+
+    task->state = TASK_STATE_INIT;
+    if (task->task_init)
+        task->task_init(task);
+
+    task->state = TASK_STATE_RUN;
+    if (task->task_run)
+        task->task_run(task);
+
+    task->state = TASK_STATE_DONE;
+    if (task->task_done)
+        task->task_done(task);
+
+    task->state = TASK_STATE_WAIT_TO_RELEASE;
+
+    return NULL;
+}
+
+void add_running_task(Task *task)
+{
+    if (!task)
+        return;
+    pthread_mutex_lock(&running_tasks_mutex);
+    running_tasks.insert(task);
+    pthread_mutex_unlock(&running_tasks_mutex);
+}
+
+void del_running_task(Task *task)
+{
+}
+
+void* task_launcher_func(void *arg)
+{
+    std::set<Task*>::iterator it;
+    Task *task = NULL;
+
+    while (1) {
+        pthread_mutex_lock(&running_tasks_mutex);
+        for (it = running_tasks.begin(); it != running_tasks.end(); it++) {
+            task = *it;
+            switch (task->state) {
+            case TASK_STATE_WAIT_TO_LAUNCH:
+                if (pthread_create(&task->thread, NULL, run_task, task) != 0) {
+                    std::cout << "Creating task(" << task->name << ") thread failed." << std::endl;
+                }
+                break;
+            case TASK_STATE_WAIT_TO_RELEASE:
+                // TODO: other things...
+                pthread_join(task->thread, NULL);
+                delete task;
+                running_tasks.erase(task);
+                break;
+            }
+        }
+        pthread_mutex_unlock(&running_tasks_mutex);
+        msleep(200);
+    }
+
+    return NULL;
+}
+
+int start_task_launcher()
+{
+    if (pthread_create(&task_launcher, NULL, task_launcher_func, NULL) != 0) {
+        std::cout << "Creating task_launcher thread failed." << std::endl;
+        return -1;
+    }
+    return 0;
+}
+
+void stop_task_launcher()
+{
+    pthread_cancel(task_launcher);
+    pthread_join(task_launcher, NULL);
 }

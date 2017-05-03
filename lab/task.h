@@ -3,16 +3,19 @@
 
 #include <string>
 #include <set>
+#include <pthread.h>
 #include <json/json.h>
 
 class Task;
 
 #include "node.h"
 
-#define TASK_STATE_IDLE 0
+#define TASK_STATE_WAIT_TO_LAUNCH 0
 #define TASK_STATE_INIT 1
 #define TASK_STATE_RUN 2
-#define TASK_STATE_DONE 3
+#define TASK_STATE_SLEEP 3
+#define TASK_STATE_DONE 4
+#define TASK_STATE_WAIT_TO_RELEASE 5
 
 class Task {
 public:
@@ -25,7 +28,7 @@ public:
         task_init(task_init),
         task_run(task_run),
         task_done(task_done) {
-            state = TASK_STATE_IDLE;
+            state = TASK_STATE_WAIT_TO_LAUNCH;
             node_tag = 0;
             node = NULL;
             parent_task_tag = 0;
@@ -37,6 +40,7 @@ public:
     std::string name;
     unsigned int tag;
     int state;
+    pthread_t thread;
 
     unsigned int node_tag;
     Node *node;
