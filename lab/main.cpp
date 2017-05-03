@@ -1,8 +1,15 @@
 #include <iostream>
+#include <unistd.h>
 #include "node.h"
 
 void work()
 {
+    int i = 5;
+    Task *task = new Task("task_5", 0x5, NULL, NULL, NULL);
+    add_running_task(task);
+    del_running_task(task, true);
+    while (i--)
+        sleep(1);
 }
 
 int main(int argc, char **argv)
@@ -29,7 +36,9 @@ int main(int argc, char **argv)
     }
     show_all_actions();
 
+    start_task_launcher();
     work();
+    stop_task_launcher();
 
     clear_all_actions();
 mount_all_actions_failed:

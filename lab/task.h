@@ -62,4 +62,9 @@ int save_task_mount_config(std::string config_file);
 void clear_all_tasks();
 void load_tasks();
 
+void add_running_task(Task *task);
+void del_running_task(Task *task, bool need_lock);
+int start_task_launcher();
+void stop_task_launcher();
+
 #endif /* TASK_H */
