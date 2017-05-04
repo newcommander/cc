@@ -7,11 +7,13 @@ CFLAGS=-c -g -Wall -fPIC -pthread
 CXXFLAGS=-c -g -Wall -fPIC -pthread
 LFLAGS=-pthread -lrt -ljsoncpp
 
-OBJ=main.o node.o task.o action.o task_1.o action_1.o
+OBJ=main.o node.o task.o action.o learn.o task_1.o action_1.o
+TEST_OBJ=test.o
 
 TARGET=run
+TEST_TARGET=test
 
-.PHONY: all clean
+.PHONY: all test clean
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(CFLAGS) $< -o $@
@@ -22,6 +24,9 @@ TARGET=run
 all: $(OBJ)
 	$(CXX) $(LINK) $(OBJ) $(LFLAGS) -o $(TARGET)
 
+test: $(TEST_OBJ)
+	$(CXX) $(LINK) $(TEST_OBJ) $(LFLAGS) -o $(TEST_TARGET)
+
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -f $(OBJ) $(TEST_OBJ) $(TARGET) $(TEST_TARGET)
 

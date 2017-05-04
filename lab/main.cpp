@@ -1,15 +1,28 @@
 #include <iostream>
+#include <stdio.h>
 #include <unistd.h>
 #include "node.h"
+#include "learn.h"
+
+static std::set<Node*> reason;
+static std::set<Node*> result;
+
+struct Link_data link_data = {
+	&reason, &result
+};
 
 void work()
 {
-    int i = 5;
-    Task *task = new Task("task_5", 0x5, NULL, NULL, NULL);
+    Task *task = new Task("learning task", 0x5, learn_should_stop, learn_init, learn_run, learn_done);
+	reason.insert(find_node_by_tag(6));
+	reason.insert(find_node_by_tag(8));
+	reason.insert(find_node_by_tag(102));
+	result.insert(find_node_by_tag(13));
+	link_data.reason = &reason;
+	link_data.result = &result;
+	task->data = &link_data;
+	add_task(task);
     add_running_task(task);
-    del_running_task(task, true);
-    while (i--)
-        sleep(1);
 }
 
 int main(int argc, char **argv)
@@ -38,6 +51,7 @@ int main(int argc, char **argv)
 
     start_task_launcher();
     work();
+	sleep(1);
     stop_task_launcher();
 
     clear_all_actions();

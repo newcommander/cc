@@ -37,7 +37,7 @@ void show_all_tasks()
 static int mount_task(Json::Value &value)
 {
     Json::Value::ArrayIndex i;
-    std::map<unsigned int, void*>::iterator task_it, node_it, sub_task_it;
+    std::map<unsigned int, void*>::iterator task_it, sub_task_it;
     Task *task, *sub_task;
     Node *node;
     unsigned int task_tag, node_tag;
@@ -59,12 +59,11 @@ static int mount_task(Json::Value &value)
     }
     task = (Task*)task_it->second;
 
-    node_it = g_nodes.find(node_tag);
-    if (node_it == g_nodes.end()) {
+	node = find_node_by_tag(node_tag);
+    if (!node) {
         std::cout << "Cannot find node(tag=" << node_tag << ") for task(tag=" << task_tag << ")" << std::endl;
         return -1;
     }
-    node = (Node*)node_it->second;
 
     task->node_tag = node_tag;
     task->node = node;
@@ -119,7 +118,7 @@ int mount_all_tasks(std::string config_file)
     return 0;
 }
 
-static void add_task(Task *task)
+void add_task(Task *task)
 {
     g_tasks.insert(KV(task->tag, task));
 }
@@ -246,6 +245,7 @@ void del_running_task(Task *task, bool need_lock)
         pthread_mutex_lock(&running_tasks_mutex);
     // TODO: other things...
     running_tasks.erase(task);
+	printf("delete task: %s\n", task->name.c_str());
     delete task;
     if (need_lock)
         pthread_mutex_unlock(&running_tasks_mutex);
@@ -262,9 +262,8 @@ static void* task_launcher_func(void *arg)
             task = *it;
             switch (task->state) {
             case TASK_STATE_WAIT_TO_LAUNCH:
-                if (pthread_create(&task->thread, NULL, run_task, task) != 0) {
+                if (pthread_create(&task->thread, NULL, run_task, task) != 0)
                     std::cout << "Creating task(" << task->name << ") thread failed." << std::endl;
-                }
                 break;
             case TASK_STATE_WAIT_TO_RELEASE:
                 del_running_task(task, false);

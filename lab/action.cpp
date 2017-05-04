@@ -29,7 +29,7 @@ void show_all_actions()
 
 static int mount_action(Json::Value &value)
 {
-    std::map<unsigned int, void*>::iterator action_it, node_it;
+    std::map<unsigned int, void*>::iterator action_it;
     Action *action;
     Node *node;
     unsigned int action_tag, node_tag;
@@ -50,12 +50,11 @@ static int mount_action(Json::Value &value)
     }
     action = (Action*)action_it->second;
 
-    node_it = g_nodes.find(node_tag);
-    if (node_it == g_nodes.end()) {
+	node = find_node_by_tag(node_tag);
+    if (!node) {
         std::cout << "Cannot find node(tag=" << node_tag << ") for action(tag=" << action_tag << ")" << std::endl;
         return -1;
     }
-    node = (Node*)node_it->second;
 
     action->node_tag = node_tag;
     action->node = node;

@@ -13,24 +13,33 @@ class Node;
 
 class Node {
 public:
-    std::string name;
+	Node() {
+		up_nodes.clear();
+		down_nodes.clear();
+		down_nodes_tags.clear();
+		task = NULL;
+		action = NULL;
+	}
+
+	std::string name;
     unsigned int tag;
+
+	std::set<Node*> up_nodes;
+    std::set<Node*> down_nodes;
+    std::set<unsigned int> down_nodes_tags;
 
     Task *task;
     Action *action;
-
-    std::set<unsigned int> co_nodes_tags;
-    std::set<Node*> co_nodes;
 };
 
 void show_all_nodes();
 void reset_node_links();
-int add_node(Json::Value &value);
+Node* find_node_by_tag(unsigned int tag);
+void add_node(Node *node);
+int add_node_by_json(Json::Value &value);
 void remove_node(Node *node);
 int save_all_nodes(std::string file);
 int load_nodes(std::string file);
 void clear_all_nodes();
-
-extern std::map<unsigned int, void*> g_nodes;
 
 #endif /* NODE_H */
