@@ -21,12 +21,12 @@ class Task {
 public:
 
     Task(std::string name, unsigned int tag,
-			bool (*task_should_stop)(void *arg),
+            bool (*task_should_stop)(void *arg),
             void (*task_init)(void *arg),
             void (*task_run)(void *arg), 
             void (*task_done)(void *arg)) :
         name(name), tag(tag),
-		task_should_stop(task_should_stop),
+        task_should_stop(task_should_stop),
         task_init(task_init),
         task_run(task_run),
         task_done(task_done) {
@@ -43,7 +43,7 @@ public:
     unsigned int tag;
     int state;
     pthread_t thread;
-	void *data;
+    void *data;
 
     unsigned int node_tag;
     Node *node;

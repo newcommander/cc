@@ -13,20 +13,25 @@ class Node;
 
 class Node {
 public:
-	Node() {
-		up_nodes.clear();
-		down_nodes.clear();
-		down_nodes_tags.clear();
-		task = NULL;
-		action = NULL;
-	}
+    Node(std::string name, unsigned int tag) :
+        name(name), tag(tag) {
+        up_nodes_tags.clear();
+        up_nodes.clear();
+        up_nodes_shadow.clear();
+        down_nodes_tags.clear();
+        down_nodes.clear();
+        task = NULL;
+        action = NULL;
+    }
 
-	std::string name;
+    std::string name;
     unsigned int tag;
 
-	std::set<Node*> up_nodes;
-    std::set<Node*> down_nodes;
+    std::set<unsigned int> up_nodes_tags;
+    std::set<Node*> up_nodes;
+    std::set<unsigned int> up_nodes_shadow;
     std::set<unsigned int> down_nodes_tags;
+    std::set<Node*> down_nodes;
 
     Task *task;
     Action *action;

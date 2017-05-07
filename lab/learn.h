@@ -5,8 +5,8 @@
 #include "node.h"
 
 struct Link_data {
-	std::set<Node*> *reason;
-	std::set<Node*> *result;
+    std::set<Node*> *reason;
+    std::set<Node*> *result;
 };
 
 bool learn_should_stop(void *arg);

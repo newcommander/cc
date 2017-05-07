@@ -59,7 +59,7 @@ static int mount_task(Json::Value &value)
     }
     task = (Task*)task_it->second;
 
-	node = find_node_by_tag(node_tag);
+    node = find_node_by_tag(node_tag);
     if (!node) {
         std::cout << "Cannot find node(tag=" << node_tag << ") for task(tag=" << task_tag << ")" << std::endl;
         return -1;
@@ -245,7 +245,7 @@ void del_running_task(Task *task, bool need_lock)
         pthread_mutex_lock(&running_tasks_mutex);
     // TODO: other things...
     running_tasks.erase(task);
-	printf("delete task: %s\n", task->name.c_str());
+    printf("delete task: %s\n", task->name.c_str());
     delete task;
     if (need_lock)
         pthread_mutex_unlock(&running_tasks_mutex);

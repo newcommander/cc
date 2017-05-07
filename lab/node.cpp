@@ -42,35 +42,43 @@ void reset_node_links()
                     node->down_nodes.insert(co_node);
             }
         }
+        for (tag_it = node->up_nodes_tags.begin(); tag_it != node->up_nodes_tags.end(); tag_it++) {
+            co_it = g_nodes.find(*tag_it);
+            if (co_it != g_nodes.end()) {
+                co_node = (Node*)co_it->second;
+                if (co_node->tag != node->tag)
+                    node->up_nodes.insert(co_node);
+            }
+        }
     }
     pthread_mutex_unlock(&g_nodes_mutex);
 }
 
 Node* find_node_by_tag(unsigned int tag)
 {
-	std::map<unsigned int, void*>::iterator it;
-	Node *node;
+    std::map<unsigned int, void*>::iterator it;
+    Node *node;
 
-	if (tag == 0)
-		return NULL;
+    if (tag == 0)
+        return NULL;
 
     pthread_mutex_lock(&g_nodes_mutex);
-	it = g_nodes.find(tag);
-	if (it == g_nodes.end())
-		node = NULL;
-	else
-		node = (Node*)it->second;
+    it = g_nodes.find(tag);
+    if (it == g_nodes.end())
+        node = NULL;
+    else
+        node = (Node*)it->second;
     pthread_mutex_unlock(&g_nodes_mutex);
 
-	return node;
+    return node;
 }
 
 void add_node(Node *node)
 {
-	if (!node)
-		return;
+    if (!node)
+        return;
     pthread_mutex_lock(&g_nodes_mutex);
-	g_nodes.insert(KV(node->tag, node));
+    g_nodes.insert(KV(node->tag, node));
     pthread_mutex_unlock(&g_nodes_mutex);
 }
 
@@ -80,23 +88,26 @@ int add_node_by_json(Json::Value &value)
     Node *node;
 
     if (!value.isMember("name") || !value["name"].isString() ||
-        !value.isMember("tag") || !value["tag"].isUInt() ||
-        !value.isMember("down_nodes") || !value["down_nodes"].isArray()) {
+        !value.isMember("tag") || !value["tag"].isUInt()) {
         std::cout << "Invalid node." << std::endl;
         return -1;
     }
 
-    node = new Node();
+    node = new Node(value["name"].asString(), value["tag"].asUInt());
     if (!node)
         return -1;
 
-    node->name = value["name"].asString();
-    node->tag = value["tag"].asUInt();
+    if (value.isMember("down_nodes") && value["down_nodes"].isArray()) {
+        for (i = 0; i < value["down_nodes"].size(); i++)
+            node->down_nodes_tags.insert(value["down_nodes"][i].asUInt());
+    }
 
-    for (i = 0; i < value["down_nodes"].size(); i++)
-        node->down_nodes_tags.insert(value["down_nodes"][i].asUInt());
+    if (value.isMember("up_nodes") && value["up_nodes"].isArray()) {
+        for (i = 0; i < value["up_nodes"].size(); i++)
+            node->up_nodes_tags.insert(value["up_nodes"][i].asUInt());
+    }
 
-	add_node(node);
+    add_node(node);
 
     return 0;
 }
@@ -125,6 +136,8 @@ int save_all_nodes(std::string file)
         value["tag"] = node->tag;
         for (co_it = node->down_nodes.begin(); co_it != node->down_nodes.end(); co_it++)
             value["down_nodes"].append((*co_it)->tag);
+        for (co_it = node->up_nodes.begin(); co_it != node->up_nodes.end(); co_it++)
+            value["up_nodes"].append((*co_it)->tag);
         root.append(value);
     }
     pthread_mutex_unlock(&g_nodes_mutex);

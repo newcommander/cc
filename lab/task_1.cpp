@@ -3,7 +3,7 @@
 
 bool task_should_stop(void *arg)
 {
-	return true;
+    return true;
 }
 
 void task_1_init(void *arg)

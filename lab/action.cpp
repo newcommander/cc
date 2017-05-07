@@ -50,7 +50,7 @@ static int mount_action(Json::Value &value)
     }
     action = (Action*)action_it->second;
 
-	node = find_node_by_tag(node_tag);
+    node = find_node_by_tag(node_tag);
     if (!node) {
         std::cout << "Cannot find node(tag=" << node_tag << ") for action(tag=" << action_tag << ")" << std::endl;
         return -1;
