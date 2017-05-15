@@ -7,7 +7,7 @@ CFLAGS=-c -g -Wall -fPIC -pthread
 CXXFLAGS=-c -g -Wall -fPIC -pthread
 LFLAGS=-pthread -lrt -ljsoncpp
 
-OBJ=main.o node.o task.o action.o learn.o timing.o task_1.o action_1.o
+OBJ=main.o node.o task.o action.o learn.o task_1.o action_1.o
 TEST_OBJ=test.o timing.o
 
 TARGET=run

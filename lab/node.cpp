@@ -25,36 +25,7 @@ void show_all_nodes()
     pthread_mutex_unlock(&g_nodes_mutex);
 }
 
-void reset_node_links()
-{
-    std::map<unsigned int, void*>::iterator it, co_it;
-    std::set<unsigned int>::iterator tag_it;
-    Node *node, *co_node;
-
-    pthread_mutex_lock(&g_nodes_mutex);
-    for (it = g_nodes.begin(); it != g_nodes.end(); it++) {
-        node = (Node*)it->second;
-        for (tag_it = node->down_nodes_tags.begin(); tag_it != node->down_nodes_tags.end(); tag_it++) {
-            co_it = g_nodes.find(*tag_it);
-            if (co_it != g_nodes.end()) {
-                co_node = (Node*)co_it->second;
-                if (co_node->tag != node->tag)
-                    node->down_nodes.insert(co_node);
-            }
-        }
-        for (tag_it = node->up_nodes_tags.begin(); tag_it != node->up_nodes_tags.end(); tag_it++) {
-            co_it = g_nodes.find(*tag_it);
-            if (co_it != g_nodes.end()) {
-                co_node = (Node*)co_it->second;
-                if (co_node->tag != node->tag)
-                    node->up_nodes.insert(co_node);
-            }
-        }
-    }
-    pthread_mutex_unlock(&g_nodes_mutex);
-}
-
-Node* find_node_by_tag(unsigned int tag)
+Node* find_node_by_tag(unsigned int tag, bool need_lock)
 {
     std::map<unsigned int, void*>::iterator it;
     Node *node;
@@ -62,15 +33,44 @@ Node* find_node_by_tag(unsigned int tag)
     if (tag == 0)
         return NULL;
 
-    pthread_mutex_lock(&g_nodes_mutex);
+    if (need_lock)
+        pthread_mutex_lock(&g_nodes_mutex);
+
     it = g_nodes.find(tag);
     if (it == g_nodes.end())
         node = NULL;
     else
         node = (Node*)it->second;
-    pthread_mutex_unlock(&g_nodes_mutex);
+
+    if (need_lock)
+        pthread_mutex_unlock(&g_nodes_mutex);
 
     return node;
+}
+
+void reset_node_links()
+{
+    std::map<unsigned int, void*>::iterator it;
+    std::set<unsigned int>::iterator tag_it;
+    Node *node, *co_node;
+
+    pthread_mutex_lock(&g_nodes_mutex);
+    for (it = g_nodes.begin(); it != g_nodes.end(); it++) {
+        node = (Node*)it->second;
+        node->down_nodes.clear();
+        for (tag_it = node->down_nodes_tags.begin(); tag_it != node->down_nodes_tags.end(); tag_it++) {
+            co_node = find_node_by_tag(*tag_it, false);
+            if (co_node && (co_node->tag != node->tag))
+                node->down_nodes.insert(co_node);
+        }
+        node->up_nodes.clear();
+        for (tag_it = node->up_nodes_tags.begin(); tag_it != node->up_nodes_tags.end(); tag_it++) {
+            co_node = find_node_by_tag(*tag_it, false);
+            if (co_node && (co_node->tag != node->tag))
+                node->up_nodes.insert(co_node);
+        }
+    }
+    pthread_mutex_unlock(&g_nodes_mutex);
 }
 
 void add_node(Node *node)
@@ -114,8 +114,9 @@ int add_node_by_json(Json::Value &value)
 
 void remove_node(Node *node)
 {
-    node->down_nodes_tags.clear();
-    node->down_nodes.clear();
+    if (!node)
+        return;
+
     delete node;
 }
 
@@ -170,7 +171,7 @@ int load_nodes(std::string file)
     }
 
     if (!root.isArray()) {
-        std::cout << file << ": Json data in file must be an Array." << std::endl;
+        std::cout << file << ": Json data must be in the format of Array." << std::endl;
         return -1;
     }
 

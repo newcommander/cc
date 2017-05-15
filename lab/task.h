@@ -17,6 +17,9 @@ class Task;
 #define TASK_STATE_DONE 4
 #define TASK_STATE_WAIT_TO_RELEASE 5
 
+#define TASK_TYPE_NORMAL 0
+#define TASK_TYPE_LEARN  1
+
 class Task {
 public:
 
@@ -39,10 +42,15 @@ public:
             sub_tasks.clear();
         }
 
+    ~Task() {
+        sub_tasks_tags.clear();
+        sub_tasks.clear();
+    }
+
     std::string name;
     unsigned int tag;
+    int type;
     int state;
-    pthread_t thread;
     void *data;
 
     unsigned int node_tag;
@@ -60,12 +68,15 @@ public:
     void (*task_done)(void *arg);
 };
 
+/*
 void show_all_tasks();
 int mount_all_tasks(std::string config_file);
-void add_task(Task *task);
 int save_task_mount_config(std::string config_file);
 void clear_all_tasks();
 void load_tasks();
+*/
+void add_task(Task *task);
+void del_task(Task *task);
 
 void add_running_task(Task *task);
 void del_running_task(Task *task, bool need_lock);

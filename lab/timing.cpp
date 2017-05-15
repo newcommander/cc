@@ -11,10 +11,14 @@ static pthread_mutex_t timer_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int add_node_to_timer(Node *node, unsigned int index)
 {
+    int i;
+
     if ((!node) || (index >= timer.size()))
         return -1;
 
     pthread_mutex_lock(&timer_mutex);
+    for (i = 0; i < TIMING_CAPECITY; i++)
+        timer[i].erase(node);
     timer[index].insert(node);
     pthread_mutex_unlock(&timer_mutex);
 

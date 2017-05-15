@@ -1,24 +1,14 @@
 #include <iostream>
 #include <fstream>
+#include <deque>
 #include "task.h"
 
 static std::map<unsigned int, void*> g_tasks;
-static std::set<Task*> running_tasks;
+static std::deque<Task*> running_tasks;
 static pthread_mutex_t running_tasks_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_t task_launcher;
+static pthread_t task_launcher, task_running;
 
-extern Task task_1;
-extern Task task_2;
-extern Task task_3;
-extern Task task_4;
-
-static Task *online_tasks[] = {
-    &task_1,
-    &task_2,
-    &task_3,
-    &task_4,
-};
-
+/*
 void show_all_tasks()
 {
     std::map<unsigned int, void*>::iterator it;
@@ -117,12 +107,23 @@ int mount_all_tasks(std::string config_file)
 
     return 0;
 }
+*/
 
 void add_task(Task *task)
 {
+    if (!task)
+        return;
     g_tasks.insert(KV(task->tag, task));
 }
 
+void del_task(Task *task)
+{
+    if (!task || (task->tag == 0))
+        return;
+    g_tasks.erase(task->tag);
+}
+
+/*
 int save_task_mount_config(std::string config_file)
 {
     std::map<unsigned int, void*>::iterator it;
@@ -156,117 +157,83 @@ void clear_all_tasks()
 
     for (it = g_tasks.begin(); it != g_tasks.end(); it++) {
         task = (Task*)it->second;
-        task->sub_tasks_tags.clear();
-        task->sub_tasks.clear();
+        delete task;
     }
     g_tasks.clear();
 }
 
 void load_tasks()
 {
-    size_t i;
-
     g_tasks.clear();
-    for (i = 0; i < ARRAY_SIZE(online_tasks); i++)
-        add_task(online_tasks[i]);
 }
+*/
 
 static void* run_task(void *arg)
 {
-    Task *task = (Task*)arg;
+    Task *task;
 
-    if (!task)
-        return NULL;
+    while (1) {
+        pthread_mutex_lock(&running_tasks_mutex);
+        if (running_tasks.size() == 0) {
+            pthread_mutex_unlock(&running_tasks_mutex);
+            msleep(50);
+            continue;
+        }
+        task = running_tasks.front();
+        running_tasks.pop_front();
+        pthread_mutex_unlock(&running_tasks_mutex);
 
-    task->state = TASK_STATE_INIT;
+        if (!task)
+            continue;
 
-    while (task->state != TASK_STATE_WAIT_TO_RELEASE) {
-        switch (task->state) {
-        case TASK_STATE_INIT:
-            if (task->task_init)
-                task->task_init(task);
-            else
-                task->state = TASK_STATE_RUN;
-            break;
-        case TASK_STATE_RUN:
-            if (task->task_run)
-                task->task_run(task);
-            else
-                task->state = TASK_STATE_DONE;
-            break;
-        case TASK_STATE_DONE:
-            if (task->task_done)
-                task->task_done(task);
-            else
-                task->state = TASK_STATE_WAIT_TO_RELEASE;
-            break;
+        task->state = TASK_STATE_INIT;
+        while (task->state != TASK_STATE_WAIT_TO_RELEASE) {
+            switch (task->state) {
+            case TASK_STATE_INIT:
+                if (task->task_init)
+                    task->task_init(task);
+                else
+                    task->state = TASK_STATE_RUN;
+                break;
+            case TASK_STATE_RUN:
+                if (task->task_run)
+                    task->task_run(task);
+                else
+                    task->state = TASK_STATE_DONE;
+                break;
+            case TASK_STATE_DONE:
+                if (task->task_done)
+                    task->task_done(task);
+                else
+                    task->state = TASK_STATE_WAIT_TO_RELEASE;
+                break;
+            }
         }
     }
 
     return NULL;
 }
 
-void add_running_task(Task *task)
-{
-    if (!task)
-        return;
-    pthread_mutex_lock(&running_tasks_mutex);
-    running_tasks.insert(task);
-    pthread_mutex_unlock(&running_tasks_mutex);
-}
-
-void del_running_task(Task *task, bool need_lock)
-{
-    struct timespec ts;
-
-    if (!task)
-        return;
-
-    if ((task->state > TASK_STATE_WAIT_TO_LAUNCH) && (task->state < TASK_STATE_WAIT_TO_RELEASE)) {
-        if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-            // TODO
-            std::cout << "clock_gettime() failed." << std::endl;
-            return;
-        }
-        ts.tv_sec += 5;
-
-        if (pthread_cancel(task->thread) != 0) {
-            std::cout << "Canceling task(" << task->name << ") failed." << std::endl;
-            return;
-        }
-
-        if (pthread_timedjoin_np(task->thread, NULL, &ts) != 0) {
-            // TODO
-            return;
-        }
-    }
-
-    if (need_lock)
-        pthread_mutex_lock(&running_tasks_mutex);
-    // TODO: other things...
-    running_tasks.erase(task);
-    printf("delete task: %s\n", task->name.c_str());
-    delete task;
-    if (need_lock)
-        pthread_mutex_unlock(&running_tasks_mutex);
-}
-
 static void* task_launcher_func(void *arg)
 {
-    std::set<Task*>::iterator it;
+    std::map<unsigned int, void*>::iterator it;
     Task *task = NULL;
+
+    if (pthread_create(&task_running, NULL, run_task, NULL) != 0) {
+        std::cout << "Creating task(" << task->name << ") thread failed." << std::endl;
+        return NULL;
+    }
 
     while (1) {
         pthread_mutex_lock(&running_tasks_mutex);
-        for (it = running_tasks.begin(); it != running_tasks.end(); it++) {
-            task = *it;
+        for (it = g_tasks.begin(); it != g_tasks.end(); it++) {
+            task = (Task*)it->second;
             switch (task->state) {
             case TASK_STATE_WAIT_TO_LAUNCH:
-                if (pthread_create(&task->thread, NULL, run_task, task) != 0)
-                    std::cout << "Creating task(" << task->name << ") thread failed." << std::endl;
+                running_tasks.push_back(task);
                 break;
             case TASK_STATE_WAIT_TO_RELEASE:
-                del_running_task(task, false);
+//                running_tasks.erase(task);
                 break;
             }
         }
