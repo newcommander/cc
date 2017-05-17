@@ -33,19 +33,11 @@ public:
         task_init(task_init),
         task_run(task_run),
         task_done(task_done) {
+            type = TASK_TYPE_NORMAL;
             state = TASK_STATE_WAIT_TO_LAUNCH;
-            node_tag = 0;
-            node = NULL;
-            parent_task_tag = 0;
-            parent_task = NULL;
-            sub_tasks_tags.clear();
-            sub_tasks.clear();
+            data = NULL;
+            begin_nodes.clear();
         }
-
-    ~Task() {
-        sub_tasks_tags.clear();
-        sub_tasks.clear();
-    }
 
     std::string name;
     unsigned int tag;
@@ -53,14 +45,7 @@ public:
     int state;
     void *data;
 
-    unsigned int node_tag;
-    Node *node;
-
-    unsigned int parent_task_tag;
-    Task *parent_task;
-
-    std::set<unsigned int> sub_tasks_tags;
-    std::set<Task*> sub_tasks;
+    std::set<Node*> begin_nodes;
 
     bool (*task_should_stop)(void *arg);
     void (*task_init)(void *arg);

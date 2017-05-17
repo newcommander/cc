@@ -6,32 +6,6 @@
 #include "task.h"
 #include "timing.h"
 
-void walk_on_mind(Learn_task *learn)
-{
-    std::deque<Node*> in_flight_nodes;
-    std::set<Node*>::iterator it, down_it;
-    Node *node, *down_node;
-
-    if (!learn)
-        return;
-
-    in_flight_nodes.clear();
-    for (it = learn->reason.begin(); it != learn->reason.end(); it++)
-        in_flight_nodes.push_back(*it);
-
-    while ((learn->task_should_stop ? !learn->task_should_stop(learn) : 0) && (in_flight_nodes.size() > 0)) {
-        node = in_flight_nodes.front();
-        for (down_it = node->down_nodes.begin(); down_it != node->down_nodes.end(); down_it++) {
-            down_node = *down_it;
-            down_node->up_nodes_shadow.insert(node->tag);
-//            add_node_to_timer(down_node, TIMING_CAPECITY);
-            if (down_node->up_nodes_shadow.size() >= down_node->up_nodes.size())
-                in_flight_nodes.push_back(down_node);
-        }
-        in_flight_nodes.pop_front();
-    }
-}
-
 bool learn_should_stop(void *arg)
 {
     Learn_task *learn = (Learn_task*)arg;

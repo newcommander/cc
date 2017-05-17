@@ -21,6 +21,7 @@ public:
         up_nodes_shadow.clear();
         down_nodes_tags.clear();
         down_nodes.clear();
+        in_timer = false;
         pthread_mutex_init(&mutex, NULL);
         task = NULL;
         action = NULL;
@@ -43,6 +44,8 @@ public:
     std::set<unsigned int> up_nodes_shadow;
     std::set<unsigned int> down_nodes_tags;
     std::set<Node*> down_nodes;
+
+    bool in_timer;
 
     Task *task;
     pthread_mutex_t mutex;

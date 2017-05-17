@@ -120,6 +120,7 @@ void del_task(Task *task)
 {
     if (!task || (task->tag == 0))
         return;
+    delete task;
     g_tasks.erase(task->tag);
 }
 
