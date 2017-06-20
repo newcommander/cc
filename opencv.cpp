@@ -416,10 +416,22 @@ static void draw_object(cv::Mat &image, cv::Mat &deep_info, Color_Planes &object
         draw_plane(image, deep_info, new_object[i].first, new_object[i].second);
 }
 
+static void draw_background(cv::Mat &image)
+{
+    int i;
+//    cv::Scalar color(86, 60, 27);
+    cv::Scalar color(147, 63, 4);
+
+    for (i = 0; i < image.rows; i++)
+        cv::line(image, cv::Point(0, image.rows - 1 - i), cv::Point(image.cols, image.rows - 1 - i),
+                color + cv::Scalar(50, 90, 90) * tanh((float)i / image.rows * PI));
+}
+
 static void opencv_draw(cv::Mat &image)
 {
     cv::Mat deep_info(image.size(), CV_64FC1, cv::Scalar(MOST_DEEP));
-    cv::rectangle(image, cv::Point(0, 0), cv::Point(image.cols, image.rows), cv::Scalar(86, 60, 27), -1);
+
+    draw_background(image);
 
     draw_object(image, deep_info, g_objects[0]);
 

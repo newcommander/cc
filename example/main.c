@@ -1,6 +1,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "../ccstream/common.h"
 #include "../ccstream/ccstream.h"
@@ -20,7 +21,7 @@ int main(int argc, char **argv)
 {
     struct stream_source stream_src;
     pthread_t t;
-    unsigned int i, x;
+    unsigned int i, x, y;
 
     stream_src.data = show_data;
     stream_src.dim[0] = 640;
@@ -39,8 +40,11 @@ int main(int argc, char **argv)
     for (i = 0; 1; i++) {
         pthread_rwlock_wrlock(&stream_src.sample_lock);
         memset(show_data, 0, stream_src.dim[0] * stream_src.dim[1] * stream_src.dim[2] * stream_src.dim[3]);
-        for (x = 0; x < stream_src.dim[0]; x++)
-            show_data[((x + i) % stream_src.dim[1]) * stream_src.dim[0] + x] = 255;
+        for (x = 0; x < stream_src.dim[0]; x++) {
+//            y = (x + i) % stream_src.dim[1];
+            y = tanh((float)x / stream_src.dim[0] * 3.14) * stream_src.dim[1];
+            show_data[y * stream_src.dim[0] + x] = 255;
+        }
         pthread_rwlock_unlock(&stream_src.sample_lock);
         msleep(50);
     }

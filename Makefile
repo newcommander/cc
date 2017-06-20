@@ -8,9 +8,9 @@ CC=/usr/local/gcc-4.8.2/bin/gcc
 CXX=/usr/local/gcc-4.8.2/bin/g++
 CFLAGS=-c -g -Wall -fPIC -pthread
 CXXFLAGS=-c -g -Wall -fPIC -pthread
-LFLAGS=-lccstream
+LFLAGS=-lm -lccstream -lfreetype
 
-OBJ=opencv.o
+OBJ=opencv.o font.o
 
 TARGET=run
 
