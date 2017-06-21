@@ -4,14 +4,21 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+#include "font.h"
+
 #define CHAR_NUM 94
 
 static FT_Library libs[CHAR_NUM];
 static FT_Face faces[CHAR_NUM];
-static char_info cis[CHAR_NUM];
+static struct char_info cis[CHAR_NUM];
 
 void get_char_info(char c, struct char_info **ci)
 {
+    if ((c < '!') || (c > '~'))
+        *ci = NULL;
+    else
+        *ci = &cis[c - '!'];
+    /*
 	FT_GlyphSlot slot;
     int i, j, n, len;
 
@@ -32,6 +39,7 @@ void get_char_info(char c, struct char_info **ci)
 		}
 	}
 	printf("----------------------\n");
+    */
 }
 
 int font_init(char *font_file)
@@ -105,7 +113,12 @@ int font_init(char *font_file)
 
 	memset(cis, 0, sizeof(struct char_info) * CHAR_NUM);
 	for (i = 0; i < CHAR_NUM; i++) {
-		char_info[i].map_left = faces
+		cis[i].map_left = faces[i]->glyph->bitmap_left;
+        cis[i].map_top = faces[i]->glyph->bitmap_top;
+        cis[i].height = faces[i]->glyph->bitmap.rows;
+        cis[i].width = faces[i]->glyph->bitmap.width;
+        cis[i].map = faces[i]->glyph->bitmap.buffer;
+        cis[i].advance = faces[i]->glyph->advance.x >> 6;
 	}
 
 	return 0;

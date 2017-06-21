@@ -3,14 +3,14 @@
 
 struct char_info {
 	int map_left;
-	int mpa_top;
+	int map_top;
 	unsigned int height;
 	unsigned int width;
 	unsigned char *map;
 	long advance;
 };
 
-extern void draw_string(char *str);
+extern void get_char_info(char c, struct char_info **ci);
 extern int font_init(char *font_file);
 extern void font_deinit();
 

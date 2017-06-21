@@ -226,11 +226,34 @@ static void draw_info(cv::Mat &image)
     int text_font = cv::FONT_HERSHEY_DUPLEX;
     double text_scale = 0.5;
     int text_thickness = 1;
-	char str[] = "nihaog";
+    unsigned int i, j;
+    cv::Scalar *p;
+    struct char_info *ci = NULL;
+    cv::Mat font_mask, dst, char_area;
 
-	draw_string(str);
+    get_char_info('A', &ci);
+    /*
+    for (i = 0; i < ci->height; i++) {
+        for (j = 0; j < ci->width; j++) {
+            printf("%02x ", ci->map[i * ci->width + j]);
+        }
+        printf("\n");
+    }
+    */
 
-	s << "camera_origin: " << camera_aixs.origin;
+    font_mask = cv::Mat(ci->height, ci->width, CV_8UC1, ci->map);
+    //font_mask.convertTo(dst, CV_8UC3);
+    char_area = image(cv::Range(0, ci->height), cv::Range(0, ci->width));
+    dst = cv::Mat::eye(47, 47, CV_8UC3);
+    dst.copyTo(char_area);
+    /*
+    for (i = 10; i < ci->height; i++) {
+        p = image.ptr<cv::Scalar>(i);
+        for (j = 10; j < ci->width; j++)
+            p[j] = text_color * 1;
+    }
+
+    s << "camera_origin: " << camera_aixs.origin;
     text = s.str();
     text_size = cv::getTextSize(text, text_font, text_scale, text_thickness, NULL);
     cv::putText(image, text, cv::Point(10, 20), text_font, text_scale, text_color, text_thickness, cv::LINE_AA, false);
@@ -239,6 +262,7 @@ static void draw_info(cv::Mat &image)
     s << "camera_angle: " << camera_angle_self << " / " << camera_angle_on_world_aixs;
     text = s.str();
     cv::putText(image, text, cv::Point(10, 20+10+text_size.height), text_font, text_scale, text_color, text_thickness, cv::LINE_AA, false);
+    */
 }
 
 static void draw_aixs(cv::Mat &image, struct Aixs &aixs, cv::Point2d offset)
