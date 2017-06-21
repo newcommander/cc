@@ -19,6 +19,7 @@ extern "C" {
 #include <math.h>
 #include "ccstream/ccstream.h"
 #include "ccstream/common.h"
+#include "font.h"
 }
 
 #define SCREEN_W 600
@@ -225,8 +226,11 @@ static void draw_info(cv::Mat &image)
     int text_font = cv::FONT_HERSHEY_DUPLEX;
     double text_scale = 0.5;
     int text_thickness = 1;
+	char str[] = "nihaog";
 
-    s << "camera_origin: " << camera_aixs.origin;
+	draw_string(str);
+
+	s << "camera_origin: " << camera_aixs.origin;
     text = s.str();
     text_size = cv::getTextSize(text, text_font, text_scale, text_thickness, NULL);
     cv::putText(image, text, cv::Point(10, 20), text_font, text_scale, text_color, text_thickness, cv::LINE_AA, false);
@@ -561,6 +565,7 @@ int main(int argc, char **argv)
 {
     struct stream_source stream_src;
     pthread_t t;
+	char font_file[] = "font.ttf";
     int ret = -1;
 
     cv::Mat image = cv::Mat::eye(SCREEN_H, SCREEN_W, CV_8UC3);
@@ -608,7 +613,12 @@ int main(int argc, char **argv)
         goto create_cc_stream_thread_failed;
     }
 
-    load_data("data/default.obj");
+	if (font_init(font_file) < 0) {
+		printf("%s: Init font library failed.\n", __func__);
+		goto create_cc_stream_thread_failed;
+	}
+
+	load_data("data/default.obj");
     while (1) {
         pthread_rwlock_wrlock(&stream_src.sample_lock);
         opencv_draw(image);
@@ -619,6 +629,7 @@ int main(int argc, char **argv)
 
     pthread_join(t, NULL);
 
+	font_deinit();
 create_cc_stream_thread_failed:
     pthread_rwlock_destroy(&stream_src.sample_lock);
 init_sws_contex_failed:

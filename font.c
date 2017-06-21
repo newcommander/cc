@@ -8,8 +8,9 @@
 
 static FT_Library libs[CHAR_NUM];
 static FT_Face faces[CHAR_NUM];
+static char_info cis[CHAR_NUM];
 
-void draw_string(char *str)
+void get_char_info(char c, struct char_info **ci)
 {
 	FT_GlyphSlot slot;
     int i, j, n, len;
@@ -18,17 +19,19 @@ void draw_string(char *str)
 	for (n = 0; n < len; n++) {
 		if ((str[n] >= '!') && (str[n] <= '~')) {
 			slot = faces[(int)(str[n] - '!')]->glyph;
+			printf("[%c: bitmap_left=%d, bitmap_top=%d, advance.x=%ld, advance.y=%ld, bitmap.rows=%d, bitmap.width=%d, linearHoriAdvance=%ld, linearVertAdvance=%ld]\n", str[n], slot->bitmap_left, slot->bitmap_top, slot->advance.x >> 6, slot->advance.y >> 6, slot->bitmap.rows, slot->bitmap.width, slot->linearHoriAdvance >> 6, slot->linearVertAdvance >> 6);
 			for (j = 0; j < slot->bitmap.rows; j++) {
 				for (i = 0; i < slot->bitmap.width; i++)
-					printf("%c", slot->bitmap.buffer[j * slot->bitmap.width + i] ? (slot->bitmap.buffer[j * slot->bitmap.width + i] > 128 ? '*' : '+') : ' ');
-				printf("|\n");
+					;//printf("%c", slot->bitmap.buffer[j * slot->bitmap.width + i] ? (slot->bitmap.buffer[j * slot->bitmap.width + i] > 128 ? '*' : '+') : ' ');
+				//printf("|\n");
 			}
 		} else if (str[n] == ' ') {
-			printf("********************\n");
+			;//printf("********************\n");
 		} else {
-			printf("--------------------\n");
+			;//printf("--------------------\n");
 		}
 	}
+	printf("----------------------\n");
 }
 
 int font_init(char *font_file)
@@ -100,10 +103,15 @@ int font_init(char *font_file)
 		}
 	}
 
+	memset(cis, 0, sizeof(struct char_info) * CHAR_NUM);
+	for (i = 0; i < CHAR_NUM; i++) {
+		char_info[i].map_left = faces
+	}
+
 	return 0;
 }
 
-void deinit_font()
+void font_deinit()
 {
     int i;
 
