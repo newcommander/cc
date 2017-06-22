@@ -556,6 +556,20 @@ static int opencv_sampling(void *_frame, int screen_h, int screen_w, void *arg)
     return 0;
 }
 
+void test()
+{
+    cv::Scalar text_color = cv::Scalar(173, 121, 54);
+    cv::Mat a, b, c, d[3], e;
+    a = (cv::Mat_<unsigned char>(3,3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
+    d[0] = a;
+    d[1] = a;
+    d[2] = a;
+    cv::merge(d, 3, b);
+    c = cv::Mat(3, 3, CV_8UC3, text_color);
+    e = c.mul(b);
+    std::cout << e << std::endl;
+}
+
 int main(int argc, char **argv)
 {
     struct stream_source stream_src;
@@ -563,6 +577,8 @@ int main(int argc, char **argv)
 	char font_file[] = "font.ttf";
     int ret = -1;
 
+    test();
+    return 0;
     cv::Mat image = cv::Mat::eye(SCREEN_H, SCREEN_W, CV_8UC3);
 
     if (av_image_alloc(src_data, src_linesize, image.cols, image.rows, AV_PIX_FMT_BGR24, 16) < 0) {
