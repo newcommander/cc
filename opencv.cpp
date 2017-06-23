@@ -220,20 +220,42 @@ static void rotating_to_camera_view(Color_Planes &object)
 static void draw_info(cv::Mat &image)
 {
     struct char_info *ci = NULL;
-    cv::Mat font_mask, font_mask_3c, char_area;
+    cv::Mat font_mask;
     cv::Mat font_mask_array[3];
+    cv::Mat font_mask_3c, char_area;
+    cv::Mat font_mask_3c_16u, de_font_mask_3c_16u, char_plane_16u, char_area_16u;
+    cv::Mat filte_out, filte_out_16u;
     cv::Scalar text_color = cv::Scalar(173, 121, 54);
+    char info[] = "nihao";
+    int i, pen_x, pen_y;
 
-    get_char_info('A', &ci);
+    pen_x = 0;
+    pen_y = 0;
+    for (i = 0; i < 5; i++) {
+        get_char_info(info[i], &ci);
+		if (!ci)
+			continue;
 
-    font_mask = cv::Mat(ci->height, ci->width, CV_8UC1, ci->map);
-	font_mask_array[0] = font_mask;
-	font_mask_array[1] = font_mask;
-	font_mask_array[2] = font_mask;
-    cv::merge(font_mask_array, 3, font_mask_3c);
+        font_mask = cv::Mat(ci->height, ci->width, CV_8UC1, ci->map);
+        font_mask_array[0] = font_mask;
+        font_mask_array[1] = font_mask;
+        font_mask_array[2] = font_mask;
+        cv::merge(font_mask_array, 3, font_mask_3c);
+        char_area = image(cv::Range(pen_y + ci->map_top, pen_y + ci->map_top + ci->height), cv::Range(pen_x + ci->map_left, pen_x + ci->map_left + ci->width));
 
-	char_area = image(cv::Range(0, ci->height), cv::Range(0, ci->width));
-    font_mask_3c.copyTo(char_area);
+        char_plane_16u = cv::Mat(ci->height, ci->width, CV_16UC3, text_color);
+        char_area.convertTo(char_area_16u, CV_16UC3);
+
+        font_mask_3c.convertTo(font_mask_3c_16u, CV_16UC3);
+        de_font_mask_3c_16u = cv::Scalar(255, 255, 255) - font_mask_3c_16u;
+
+        filte_out_16u = (char_plane_16u.mul(font_mask_3c_16u) + char_area_16u.mul(de_font_mask_3c_16u)) / 255;
+        filte_out_16u.convertTo(filte_out, CV_8UC3);
+
+        filte_out.copyTo(char_area);
+
+        pen_x += ci->advance;
+    }
 }
 
 static void draw_aixs(cv::Mat &image, struct Aixs &aixs, cv::Point2d offset)
@@ -556,29 +578,13 @@ static int opencv_sampling(void *_frame, int screen_h, int screen_w, void *arg)
     return 0;
 }
 
-void test()
-{
-    cv::Scalar text_color = cv::Scalar(173, 121, 54);
-    cv::Mat a, b, c, d[3], e;
-    a = (cv::Mat_<unsigned char>(3,3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
-    d[0] = a;
-    d[1] = a;
-    d[2] = a;
-    cv::merge(d, 3, b);
-    c = cv::Mat(3, 3, CV_8UC3, text_color);
-    e = c.mul(b);
-    std::cout << e << std::endl;
-}
-
 int main(int argc, char **argv)
 {
     struct stream_source stream_src;
     pthread_t t;
-	char font_file[] = "font.ttf";
+    char font_file[] = "font.ttf";
     int ret = -1;
 
-    test();
-    return 0;
     cv::Mat image = cv::Mat::eye(SCREEN_H, SCREEN_W, CV_8UC3);
 
     if (av_image_alloc(src_data, src_linesize, image.cols, image.rows, AV_PIX_FMT_BGR24, 16) < 0) {
@@ -624,12 +630,12 @@ int main(int argc, char **argv)
         goto create_cc_stream_thread_failed;
     }
 
-	if (font_init(font_file) < 0) {
-		printf("%s: Init font library failed.\n", __func__);
-		goto create_cc_stream_thread_failed;
-	}
+    if (font_init(font_file) < 0) {
+        printf("%s: Init font library failed.\n", __func__);
+        goto create_cc_stream_thread_failed;
+    }
 
-	load_data("data/default.obj");
+    load_data("data/default.obj");
     while (1) {
         pthread_rwlock_wrlock(&stream_src.sample_lock);
         opencv_draw(image);
@@ -640,7 +646,7 @@ int main(int argc, char **argv)
 
     pthread_join(t, NULL);
 
-	font_deinit();
+    font_deinit();
 create_cc_stream_thread_failed:
     pthread_rwlock_destroy(&stream_src.sample_lock);
 init_sws_contex_failed:
