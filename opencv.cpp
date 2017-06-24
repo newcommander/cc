@@ -220,30 +220,51 @@ static void rotating_to_camera_view(Color_Planes &object)
 static void draw_info(cv::Mat &image)
 {
     struct char_info *ci = NULL;
-    cv::Mat font_mask;
+    cv::Mat font_mask, sub_font_mask;
     cv::Mat font_mask_array[3];
     cv::Mat font_mask_3c, char_area;
     cv::Mat font_mask_3c_16u, de_font_mask_3c_16u, char_plane_16u, char_area_16u;
     cv::Mat filte_out, filte_out_16u;
     cv::Scalar text_color = cv::Scalar(173, 121, 54);
-    char info[] = "nihao";
-    int i, pen_x, pen_y;
+    int origin_x, origin_y;
+    int mask_row_start, mask_row_end, mask_col_start, mask_col_end;
+    int area_row_start, area_row_end, area_col_start, area_col_end;
+    int height, width;
+    unsigned int i;
+    char info[] = "nihaog!";
 
-    pen_x = 0;
-    pen_y = 0;
-    for (i = 0; i < 5; i++) {
+    origin_x = 0;
+    origin_y = 100;
+    for (i = 0; i < strlen(info); i++) {
         get_char_info(info[i], &ci);
-		if (!ci)
-			continue;
+        if (!ci)
+            continue;
+        if ((origin_x >= image.cols) || (origin_y >= image.rows))
+            continue;
+
+        mask_row_start = origin_y > ci->map_top ? 0 : ci->map_top - origin_y;
+        mask_row_end = (int)(origin_y + ci->height - ci->map_top) > image.rows ? image.rows - 1 - origin_y + ci->map_top : ci->height - 1;
+        mask_col_start = 0;
+        mask_col_end = (origin_x + ci->advance) > (image.cols - 1) ? ci->width - 1 - (origin_x + ci->advance - image.cols) : ci->width - 1;
+        area_row_start = origin_y - (ci->map_top - mask_row_start);
+        area_row_end = area_row_start + (mask_row_end - mask_row_start);
+        area_col_start = origin_x;
+        area_col_end = area_col_start + (mask_col_end - mask_col_start);
+
+        height = mask_row_end - mask_row_start + 1;
+        width = mask_col_end - mask_col_start + 1;
+        if ((height <= 1) || (width <= 1))
+            continue;
 
         font_mask = cv::Mat(ci->height, ci->width, CV_8UC1, ci->map);
-        font_mask_array[0] = font_mask;
-        font_mask_array[1] = font_mask;
-        font_mask_array[2] = font_mask;
+        sub_font_mask = font_mask(cv::Range(mask_row_start, mask_row_end + 1), cv::Range(mask_col_start, mask_col_end + 1));
+        font_mask_array[0] = sub_font_mask;
+        font_mask_array[1] = sub_font_mask;
+        font_mask_array[2] = sub_font_mask;
         cv::merge(font_mask_array, 3, font_mask_3c);
-        char_area = image(cv::Range(pen_y + ci->map_top, pen_y + ci->map_top + ci->height), cv::Range(pen_x + ci->map_left, pen_x + ci->map_left + ci->width));
+        char_area = image(cv::Range(area_row_start, area_row_end + 1), cv::Range(area_col_start, area_col_end + 1));
 
-        char_plane_16u = cv::Mat(ci->height, ci->width, CV_16UC3, text_color);
+        char_plane_16u = cv::Mat(height, width, CV_16UC3, text_color);
         char_area.convertTo(char_area_16u, CV_16UC3);
 
         font_mask_3c.convertTo(font_mask_3c_16u, CV_16UC3);
@@ -254,7 +275,7 @@ static void draw_info(cv::Mat &image)
 
         filte_out.copyTo(char_area);
 
-        pen_x += ci->advance;
+        origin_x += ci->advance;
     }
 }
 
