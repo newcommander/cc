@@ -8,7 +8,7 @@ OBJ=build.o
 
 TARGET=libmind.so
 
-.PHONY: all clean
+.PHONY: all ming_shared clean
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(CFLAGS) $< -o $@
@@ -16,7 +16,9 @@ TARGET=libmind.so
 %.o: %.cpp
 	$(CXX) $(INCLUDE) $(CXXFLAGS) $< -o $@
 
-all: $(OBJ)
+all: mind_shared
+
+mind_shared: $(OBJ)
 	$(CC) $(LINK) $(OBJ) $(LFLAGS) -shared -o $(TARGET)
 
 clean:

@@ -8,7 +8,7 @@ OBJ=setup.o
 
 TARGET=libperceptron.so
 
-.PHONY: all clean
+.PHONY: all perceptron_shared clean
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(CFLAGS) $< -o $@
@@ -16,7 +16,9 @@ TARGET=libperceptron.so
 %.o: %.cpp
 	$(CXX) $(INCLUDE) $(CXXFLAGS) $< -o $@
 
-all: $(OBJ)
+all: perceptron_shared
+
+perceptron_shared: $(OBJ)
 	$(CC) $(LINK) $(OBJ) $(LFLAGS) -shared -o $(TARGET)
 
 clean:

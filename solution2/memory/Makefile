@@ -5,10 +5,12 @@ CXXFLAGS=-c -g -Wall -fPIC -pthread
 LFLAGS=-pthread -lrt
 
 OBJ=build.o
-
 TARGET=libmemory.so
 
-.PHONY: all clean
+TEST_OBJ=test.o
+TEST_TARGET=run
+
+.PHONY: all memory_shared test clean
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(CFLAGS) $< -o $@
@@ -16,9 +18,14 @@ TARGET=libmemory.so
 %.o: %.cpp
 	$(CXX) $(INCLUDE) $(CXXFLAGS) $< -o $@
 
-all: $(OBJ)
+all: memory_shared test
+	$(CC) $(LINK) $(OBJ) $(TEST_OBJ) $(LFLAGS) -o $(TEST_TARGET)
+
+memory_shared: $(OBJ)
 	$(CC) $(LINK) $(OBJ) $(LFLAGS) -shared -o $(TARGET)
 
+test: $(TEST_OBJ)
+
 clean:
-	rm -f $(TARGET) $(OBJ)
+	rm -f $(TARGET) $(TEST_TARGET) $(OBJ) $(TEST_OBJ)
 

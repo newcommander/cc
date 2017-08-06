@@ -8,7 +8,7 @@ OBJ=setup.o
 
 TARGET=libaction.so
 
-.PHONY: all clean
+.PHONY: all action_shared clean
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(CFLAGS) $< -o $@
@@ -16,7 +16,9 @@ TARGET=libaction.so
 %.o: %.cpp
 	$(CXX) $(INCLUDE) $(CXXFLAGS) $< -o $@
 
-all: $(OBJ)
+all: action_shared
+
+action_shared: $(OBJ)
 	$(CC) $(LINK) $(OBJ) $(LFLAGS) -shared -o $(TARGET)
 
 clean:
