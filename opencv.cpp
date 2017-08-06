@@ -42,6 +42,8 @@ static int src_linesize[4];
 static uint8_t *dst_data[4];
 static int dst_linesize[4];
 
+static cv::Mat background;
+
 static struct Aixs {
     cv::Point3d origin;
     cv::Point3d x_aixs;
@@ -421,6 +423,10 @@ static void draw_plane(cv::Mat &image, cv::Mat &deep_info, std::vector<cv::Point
 
     if ((min_x >= max_x) || (min_y >= max_y))
         return;
+    if (((origin.y - max_y) < 0) || ((origin.x + min_x) < 0))
+        return;
+    if (((origin.x + max_x) > image.cols) || ((origin.y - min_y) > image.rows))
+        return;
 
     plane_area = image(cv::Range(origin.y - max_y, origin.y - min_y), cv::Range(origin.x + min_x, origin.x + max_x));
     deep_info_area = deep_info(cv::Range(origin.y - max_y, origin.y - min_y), cv::Range(origin.x + min_x, origin.x + max_x));
@@ -458,24 +464,27 @@ static void draw_object(cv::Mat &image, cv::Mat &deep_info, Color_Planes &object
         draw_plane(image, deep_info, new_object[i].first, new_object[i].second);
 }
 
-static void draw_background(cv::Mat &image)
+static void reset_background(cv::Mat &image)
 {
     int i;
-//    cv::Scalar color(86, 60, 27);
     cv::Scalar color(147, 63, 4);
 
-    for (i = 0; i < image.rows; i++)
-        cv::line(image, cv::Point(0, image.rows - 1 - i), cv::Point(image.cols, image.rows - 1 - i),
-                color + cv::Scalar(50, 90, 90) * tanh((float)i / image.rows * PI));
+    background = cv::Mat::eye(image.rows, image.cols, image.type());
+
+    for (i = 0; i < background.rows; i++)
+        cv::line(background, cv::Point(0, background.rows - 1 - i), cv::Point(background.cols, background.rows - 1 - i),
+                color + cv::Scalar(50, 90, 90) * tanh((float)i / background.rows * PI));
 }
 
 static void opencv_draw(cv::Mat &image)
 {
     cv::Mat deep_info(image.size(), CV_64FC1, cv::Scalar(MOST_DEEP));
+    unsigned int n;
 
-    draw_background(image);
+    background.copyTo(image);
 
-    draw_object(image, deep_info, g_objects[0]);
+    for (n = 0; n < g_objects.size(); n++)
+        draw_object(image, deep_info, g_objects[n]);
 
     draw_aixs(image, world_aixs, cv::Point2d(-250, -150));
 
@@ -488,7 +497,7 @@ static void opencv_draw(cv::Mat &image)
 
 static void make_point3d(std::string line, std::vector<cv::Point3d> &vertexes)
 {
-    double x, y, z, scale = 50;
+    double x, y, z, scale = 30;
     // XXX precision loss
     sscanf(line.c_str(), "%lf %lf %lf", &x, &y, &z);
     vertexes.push_back(cv::Point3d(x * scale, y * scale, z * scale));
@@ -525,14 +534,15 @@ static int load_data(std::string file_name)
     Color_Planes obj;
     cv::RNG rng(rand());
 
+                vertexes.clear();
     if (file) {
         while (std::getline(file, line)) {
+next_obj:
             if (line[0] == '#')
                 continue;
             type = line.substr(0, line.find(' ', 0));
             if (type == "o") {
                 obj.clear();
-                vertexes.clear();
                 while (std::getline(file, line)) {
                     if (line[0] == '#')
                         continue;
@@ -544,7 +554,7 @@ static int load_data(std::string file_name)
                 }
                 if (vertexes.size() == 0)
                     continue;
-                while (std::getline(file, line)) {
+                do {
                     if (line[0] == '#')
                         continue;
                     type = line.substr(0, line.find(' ', 0));
@@ -553,8 +563,10 @@ static int load_data(std::string file_name)
                                 cv::Scalar(rng.uniform(0, 256), rng.uniform(0, 256), rng.uniform(0, 256)), vertexes, obj);
                     else if (type == "o")
                         break;
-                }
+                } while (std::getline(file, line));
                 g_objects.push_back(obj);
+                if (type == "o")
+                    goto next_obj;
             }
         }
     } else {
@@ -657,6 +669,7 @@ int main(int argc, char **argv)
     }
 
     load_data("data/default.obj");
+    reset_background(image);
     while (1) {
         pthread_rwlock_wrlock(&stream_src.sample_lock);
         opencv_draw(image);
