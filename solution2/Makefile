@@ -1,5 +1,5 @@
 INCLUDE=-I/root/work/stream/output/include
-LINK=-L/root/work/stream/output/lib
+LINK=-L/root/work/stream/output/lib -L/root/work/stream/cc/ccstream
 
 MEMORY_DIR=memory
 MIND_DIR=mind

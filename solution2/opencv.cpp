@@ -121,18 +121,21 @@ static void reset_background(cv::Mat &image)
 
 static void draw_space(cv::Mat &image)
 {
+    int x, y;
     unsigned int i;
     pthread_mutex_lock(&motivate_lock);
     for (i = 0; i < motivate_pool.size(); i++) {
-        image.at<cv::Vec3b>(motivate_pool[i].first+1, motivate_pool[i].second+1) = cv::Vec3b(0, 0, 255);
-        image.at<cv::Vec3b>(motivate_pool[i].first+1, motivate_pool[i].second) = cv::Vec3b(0, 0, 255);
-        image.at<cv::Vec3b>(motivate_pool[i].first+1, motivate_pool[i].second-1) = cv::Vec3b(0, 0, 255);
-        image.at<cv::Vec3b>(motivate_pool[i].first, motivate_pool[i].second+1) = cv::Vec3b(0, 0, 255);
-        image.at<cv::Vec3b>(motivate_pool[i].first, motivate_pool[i].second) = cv::Vec3b(0, 0, 255);
-        image.at<cv::Vec3b>(motivate_pool[i].first, motivate_pool[i].second-1) = cv::Vec3b(0, 0, 255);
-        image.at<cv::Vec3b>(motivate_pool[i].first-1, motivate_pool[i].second+1) = cv::Vec3b(0, 0, 255);
-        image.at<cv::Vec3b>(motivate_pool[i].first-1, motivate_pool[i].second) = cv::Vec3b(0, 0, 255);
-        image.at<cv::Vec3b>(motivate_pool[i].first-1, motivate_pool[i].second-1) = cv::Vec3b(0, 0, 255);
+        x = motivate_pool[i].first;
+        y = motivate_pool[i].second;
+        image.at<cv::Vec3b>(y+1, x+1) = cv::Vec3b(0, 0, 255);
+        image.at<cv::Vec3b>(y+1, x) = cv::Vec3b(0, 0, 255);
+        image.at<cv::Vec3b>(y+1, x-1) = cv::Vec3b(0, 0, 255);
+        image.at<cv::Vec3b>(y, x+1) = cv::Vec3b(0, 0, 255);
+        image.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 255);
+        image.at<cv::Vec3b>(y, x-1) = cv::Vec3b(0, 0, 255);
+        image.at<cv::Vec3b>(y-1, x+1) = cv::Vec3b(0, 0, 255);
+        image.at<cv::Vec3b>(y-1, x) = cv::Vec3b(0, 0, 255);
+        image.at<cv::Vec3b>(y-1, x-1) = cv::Vec3b(0, 0, 255);
     }
     motivate_pool.clear();
     pthread_mutex_unlock(&motivate_lock);
